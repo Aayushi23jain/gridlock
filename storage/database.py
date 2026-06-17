@@ -27,9 +27,21 @@ def _connect() -> sqlite3.Connection:
             image_source TEXT,
             evidence_path TEXT,
             timestamp TEXT NOT NULL,
-            metadata TEXT
+            metadata TEXT,
+            speed REAL,
+            speed_limit REAL
         )
     """)
+    
+    # Migration: Add speed columns if they don't exist (for existing databases)
+    try:
+        conn.execute("ALTER TABLE violations ADD COLUMN speed REAL")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        conn.execute("ALTER TABLE violations ADD COLUMN speed_limit REAL")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.commit()
     return conn
 
@@ -40,8 +52,8 @@ def save_violation(record: dict) -> int:
         """
         INSERT INTO violations
         (violation_type, confidence, license_plate, plate_confidence, vehicle_class,
-         bbox, image_source, evidence_path, timestamp, metadata)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         bbox, image_source, evidence_path, timestamp, metadata, speed, speed_limit)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             record["violation_type"],
@@ -54,6 +66,8 @@ def save_violation(record: dict) -> int:
             record.get("evidence_path", ""),
             record.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             json.dumps(record.get("metadata", {})),
+            record.get("speed", None),
+            record.get("speed_limit", None),
         ),
     )
     conn.commit()
@@ -101,3 +115,23 @@ def get_total_count() -> int:
     row = conn.execute("SELECT COUNT(*) as cnt FROM violations").fetchone()
     conn.close()
     return row["cnt"] if row else 0
+
+
+def delete_all_violations() -> int:
+    """Delete all violation records from the database."""
+    conn = _connect()
+    cur = conn.execute("DELETE FROM violations")
+    deleted_count = cur.rowcount
+    conn.commit()
+    conn.close()
+    return deleted_count
+
+
+def delete_violation_by_id(violation_id: int) -> bool:
+    """Delete a specific violation record by ID."""
+    conn = _connect()
+    cur = conn.execute("DELETE FROM violations WHERE id = ?", (violation_id,))
+    deleted = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted

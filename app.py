@@ -4,7 +4,7 @@ import zipfile
 from pdf2image import convert_from_path
 
 from pipeline import TrafficViolationPipeline
-from analytics.reports import violation_statistics, generate_summary_report
+from analytics.reports import violation_statistics, generate_summary_report, clear_all_violation_data
 from storage.database import search_violations
 from evidence.challan_generator import generate_challan_for_violation
 
@@ -281,6 +281,26 @@ with analytics_tab:
         file_name="violation_report.txt",
         mime="text/plain",
     )
+
+    st.markdown("---")
+    st.markdown("#### 🗑️ Data Management")
+    
+    col_delete1, col_delete2 = st.columns([3, 1])
+    
+    with col_delete1:
+        st.warning("⚠️ This will permanently delete all violation records from the database. This action cannot be undone.")
+    
+    with col_delete2:
+        if st.button("🗑️ Delete All Records", type="secondary"):
+            if st.session_state.get("delete_confirmed", False):
+                result = clear_all_violation_data()
+                st.success(f"✅ {result['message']}")
+                st.session_state.delete_confirmed = False
+                st.rerun()
+            else:
+                st.session_state.delete_confirmed = True
+                st.error("🚨 Click again to confirm deletion!")
+                st.rerun()
 
     if st.button("🔄 Run Evaluation (test_data)"):
         with st.spinner("Evaluating on test_data..."):

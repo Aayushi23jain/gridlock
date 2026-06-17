@@ -15,12 +15,126 @@ VIOLATION_TYPES = [
     "Stop-Line Violation",
     "Red-Light Violation",
     "Illegal Parking",
+    "Overspeed",
 ]
 
 
 class ViolationDetector:
     def __init__(self):
         self.geometry = GeometryAnalyzer()
+        # Tracking state for speed detection
+        self.vehicle_tracks = {}  # track_id -> {positions: [], timestamps: [], vehicle_class: str}
+        self.next_track_id = 0
+        self.frame_timestamp = None
+        self.reference_distance_pixels = 100  # Default: will be calibrated
+        self.reference_distance_meters = 10.0  # Default: 10 meters between reference points
+        self.speed_limits = {
+            "car": 50,
+            "truck": 40,
+            "bus": 45,
+            "motorcycle": 60,
+            "bicycle": 25
+        }
+
+    def set_speed_calibration(self, reference_pixels: float, reference_meters: float):
+        """Set calibration for speed calculation."""
+        self.reference_distance_pixels = reference_pixels
+        self.reference_distance_meters = reference_meters
+
+    def set_speed_limit(self, vehicle_class: str, limit_kmh: float):
+        """Set speed limit for a specific vehicle type."""
+        self.speed_limits[vehicle_class] = limit_kmh
+
+    def set_frame_timestamp(self, timestamp: float):
+        """Set the current frame timestamp for tracking."""
+        self.frame_timestamp = timestamp
+
+    def _track_vehicles(self, detections: list[dict]) -> dict:
+        """Track vehicles across frames using centroid tracking."""
+        vehicles = [d for d in detections if d["class"] in ("car", "motorcycle", "bus", "truck", "bicycle")]
+        current_centers = {v["class"]: v["center"] for v in vehicles}
+        
+        # Simple centroid tracking - match detections to existing tracks
+        matched_track_ids = set()
+        new_tracks = {}
+        
+        for vehicle in vehicles:
+            center = vehicle["center"]
+            vehicle_class = vehicle["class"]
+            
+            # Find closest existing track
+            best_track_id = None
+            min_distance = float('inf')
+            
+            for track_id, track_data in self.vehicle_tracks.items():
+                if track_id in matched_track_ids:
+                    continue
+                if track_data["vehicle_class"] != vehicle_class:
+                    continue
+                
+                if track_data["positions"]:
+                    last_position = track_data["positions"][-1]
+                    distance = ((center[0] - last_position[0])**2 + (center[1] - last_position[1])**2)**0.5
+                    
+                    if distance < min_distance and distance < 100:  # Max distance threshold
+                        min_distance = distance
+                        best_track_id = track_id
+            
+            if best_track_id is not None:
+                # Update existing track
+                self.vehicle_tracks[best_track_id]["positions"].append(center)
+                self.vehicle_tracks[best_track_id]["timestamps"].append(self.frame_timestamp)
+                self.vehicle_tracks[best_track_id]["bboxes"].append(vehicle["bbox"])
+                matched_track_ids.add(best_track_id)
+                new_tracks[best_track_id] = self.vehicle_tracks[best_track_id]
+            else:
+                # Create new track
+                new_track_id = self.next_track_id
+                self.next_track_id += 1
+                self.vehicle_tracks[new_track_id] = {
+                    "positions": [center],
+                    "timestamps": [self.frame_timestamp],
+                    "vehicle_class": vehicle_class,
+                    "bboxes": [vehicle["bbox"]]
+                }
+                new_tracks[new_track_id] = self.vehicle_tracks[new_track_id]
+        
+        # Remove old tracks that weren't matched (cleanup old tracks)
+        active_track_ids = set(new_tracks.keys())
+        self.vehicle_tracks = {tid: data for tid, data in self.vehicle_tracks.items() if tid in active_track_ids}
+        
+        return new_tracks
+
+    def _calculate_speed(self, track_data: dict) -> tuple[float, float]:
+        """Calculate speed from track data. Returns (speed_kmh, confidence)."""
+        positions = track_data["positions"]
+        timestamps = track_data["timestamps"]
+        
+        if len(positions) < 2:
+            return 0.0, 0.0
+        
+        # Calculate total distance and time
+        total_distance_pixels = 0.0
+        for i in range(1, len(positions)):
+            dx = positions[i][0] - positions[i-1][0]
+            dy = positions[i][1] - positions[i-1][1]
+            total_distance_pixels += (dx**2 + dy**2)**0.5
+        
+        total_time = timestamps[-1] - timestamps[0]
+        
+        if total_time <= 0:
+            return 0.0, 0.0
+        
+        # Convert to real-world speed
+        pixels_per_meter = self.reference_distance_pixels / self.reference_distance_meters
+        distance_meters = total_distance_pixels / pixels_per_meter
+        speed_ms = distance_meters / total_time
+        speed_kmh = speed_ms * 3.6
+        
+        # Confidence based on tracking duration and stability
+        confidence = min(1.0, len(positions) / 10.0)  # More frames = higher confidence
+        
+        return speed_kmh, confidence
 
     def _persons_on_vehicle(self, vehicle_bbox: list[int], persons: list[dict], margin: float = 0.15) -> list[dict]:
         x1, y1, x2, y2 = vehicle_bbox
@@ -61,6 +175,38 @@ class ViolationDetector:
         missing = edge_density < 0.04
         confidence = 0.5 + (0.04 - edge_density) * 5 if missing else 0.0
         return missing, min(confidence, 0.85)
+
+    def _detect_overspeed(self, image: np.ndarray, detections: list[dict]) -> list[dict]:
+        """Detect overspeed violations using tracking data."""
+        if self.frame_timestamp is None:
+            return []
+        
+        # Track vehicles
+        tracks = self._track_vehicles(detections)
+        violations = []
+        
+        for track_id, track_data in tracks.items():
+            vehicle_class = track_data["vehicle_class"]
+            speed_kmh, confidence = self._calculate_speed(track_data)
+            
+            # Get speed limit for this vehicle type
+            speed_limit = self.speed_limits.get(vehicle_class, 50)
+            
+            # Check if speed exceeds limit
+            if speed_kmh > speed_limit and confidence > 0.3:
+                # Get the most recent bbox
+                bbox = track_data["bboxes"][-1]
+                
+                violations.append({
+                    "type": "Overspeed",
+                    "confidence": round(confidence * 0.8, 3),  # Base confidence on tracking quality
+                    "bbox": bbox,
+                    "vehicle_class": vehicle_class,
+                    "speed": round(speed_kmh, 1),
+                    "speed_limit": speed_limit
+                })
+        
+        return violations
 
     def detect_violations(self, image: np.ndarray, detections: list[dict]) -> list[dict]:
         self.geometry.analyze_scene(image)
@@ -161,6 +307,14 @@ class ViolationDetector:
         # Synthetic test scenes: detect colored mock vehicles when YOLO finds nothing
         if not violations and not vehicles:
             violations.extend(self._detect_synthetic_violations(image))
+
+        # Detect overspeed violations (requires tracking data)
+        overspeed_violations = self._detect_overspeed(image, detections)
+        for ov in overspeed_violations:
+            key = ("Overspeed", tuple(ov["bbox"]))
+            if key not in seen:
+                seen.add(key)
+                violations.append(ov)
 
         return violations
 

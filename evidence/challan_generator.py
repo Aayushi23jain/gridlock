@@ -19,6 +19,7 @@ VIOLATION_FINES = {
     "Stop-Line Violation": 500,
     "Red-Light Violation": 1000,
     "Illegal Parking": 500,
+    "Overspeed": 2000,
 }
 
 # Violation sections and legal references
@@ -30,6 +31,7 @@ VIOLATION_LEGAL_REFERENCES = {
     "Stop-Line Violation": "Section 177, Motor Vehicles Act",
     "Red-Light Violation": "Section 183, Motor Vehicles Act",
     "Illegal Parking": "Section 177, Motor Vehicles Act",
+    "Overspeed": "Section 184, Motor Vehicles Act",
 }
 
 # Authority information
@@ -164,6 +166,10 @@ class EChallanGenerator:
         fine_amount = VIOLATION_FINES.get(violation_type, 500)
         legal_ref = VIOLATION_LEGAL_REFERENCES.get(violation_type, "Motor Vehicles Act")
         
+        # Speed information for overspeed violations
+        speed = violation_data.get("speed")
+        speed_limit = violation_data.get("speed_limit")
+        
         # Get location information
         location_info = self._get_camera_location(camera_id)
         
@@ -181,8 +187,10 @@ class EChallanGenerator:
         pdf.ln(3)
 
         # ========== SECTION 2: VIOLATION DETAILS ==========
+        # Adjust height for overspeed violations
+        section_height = 25 if violation_type != "Overspeed" else 32
         pdf.set_fill_color(255, 240, 240)
-        pdf.rect(10, pdf.get_y(), 190, 25, "F")
+        pdf.rect(10, pdf.get_y(), 190, section_height, "F")
         pdf.set_font("Arial", "B", 12)
         pdf.set_text_color(220, 53, 69)
         pdf.cell(0, 6, "VIOLATION DETAILS", ln=1, align="L")
@@ -191,6 +199,17 @@ class EChallanGenerator:
         pdf.set_font("Arial", "", 10)
         pdf.cell(95, 6, f"Violation Type: {violation_type}", ln=0)
         pdf.cell(95, 6, f"Legal Reference: {legal_ref}", ln=1)
+        
+        # Add speed information for overspeed violations
+        if violation_type == "Overspeed" and speed is not None and speed_limit is not None:
+            pdf.cell(95, 6, f"Detected Speed: {speed} km/h", ln=0)
+            pdf.cell(95, 6, f"Speed Limit: {speed_limit} km/h", ln=1)
+            pdf.set_font("Arial", "B", 10)
+            pdf.set_text_color(220, 53, 69)
+            excess = speed - speed_limit
+            pdf.cell(0, 6, f"Excess Speed: +{excess:.1f} km/h", ln=1)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("Arial", "", 10)
         pdf.cell(95, 6, f"Confidence Score: {confidence * 100:.1f}%", ln=0)
         pdf.cell(95, 6, f"Vehicle Class: {vehicle_class}", ln=1)
         pdf.ln(4)

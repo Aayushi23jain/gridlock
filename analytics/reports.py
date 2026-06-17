@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime
 
-from storage.database import get_all_violations, count_by_type, get_total_count
+from storage.database import get_all_violations, count_by_type, get_total_count, delete_all_violations
 
 
 def violation_statistics() -> dict:
@@ -50,3 +50,19 @@ def generate_summary_report() -> str:
         for day, count in stats["daily_counts"].items():
             lines.append(f"  - {day}: {count}")
     return "\n".join(lines)
+
+
+def clear_all_violation_data() -> dict:
+    """Delete all violation records and return confirmation."""
+    stats_before = violation_statistics()
+    deleted_count = delete_all_violations()
+    stats_after = violation_statistics()
+    
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "violations_before": stats_before["total_violations"],
+        "violations_after": stats_after["total_violations"],
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "message": f"Successfully deleted {deleted_count} violation records"
+    }

@@ -1,7 +1,7 @@
 # Gridlock 2.0 - Traffic Violation AI System Requirements
 # Optimized for deployment without GPU (CPU-based inference)
 
-# PyTorch CPU versions from PyTorch官方源
+# PyTorch CPU versions from PyTorch
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Core framework
