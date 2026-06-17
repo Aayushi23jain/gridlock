@@ -4,6 +4,7 @@ numpy>=1.24.0
 fpdf2>=2.7.0
 pdf2image>=1.17.0
 ultralytics>=8.1.0
-torch>=2.0.0
-torchvision>=0.15.0
 easyocr>=1.7.1
+--find-links https://download.pytorch.org/whl/cpu
+torch>=2.0.0+cpu
+torchvision>=0.15.0+cpu
