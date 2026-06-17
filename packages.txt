@@ -1,3 +1,4 @@
 poppler-utils
 freeglut3-dev
-libgl1-mesa-glx
+libgl1
+libglx-mesa0
