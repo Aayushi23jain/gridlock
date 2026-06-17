@@ -12,7 +12,7 @@ from analytics.reports import violation_statistics
 from detection.vehicle_detector import VehicleDetector
 from detection.violation_detector import ViolationDetector
 from evidence.annotator import annotate_frame
-from ocr.plate_reader import PlateReader
+from ocr.enhanced_plate_reader import EnhancedPlateReader
 from preprocessing import preprocess_image
 from storage.database import save_violation
 
@@ -21,7 +21,7 @@ class TrafficViolationPipeline:
     def __init__(self):
         self.vehicle_detector = VehicleDetector()
         self.violation_detector = ViolationDetector()
-        self.plate_reader = PlateReader()
+        self.plate_reader = EnhancedPlateReader()
         self._last_latency_ms = 0.0
         self._stats_cache = None
 

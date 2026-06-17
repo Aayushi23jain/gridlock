@@ -1,12 +1,12 @@
 import streamlit as st
 import os
 import zipfile
-from fpdf import FPDF
 from pdf2image import convert_from_path
 
 from pipeline import TrafficViolationPipeline
 from analytics.reports import violation_statistics, generate_summary_report
 from storage.database import search_violations
+from evidence.challan_generator import generate_challan_for_violation
 
 st.set_page_config(
     layout="wide",
@@ -202,26 +202,37 @@ with main_tab:
                 if item.get("crop_img") is not None:
                     st.image(item["crop_img"], caption="Plate ROI", width=200)
             with col_action:
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", style="B", size=16)
-                pdf.cell(200, 15, txt="DIGITAL CITATION RECORD", ln=1, align="C")
-                pdf.set_font("Arial", size=12)
-                pdf.cell(200, 10, txt=f"Violation: {item['violation_type']}", ln=1)
-                pdf.cell(200, 10, txt=f"Plate: {plate}", ln=1)
-                pdf.cell(200, 10, txt=f"Confidence: {item['confidence'] * 100:.1f}%", ln=1)
-                pdf.cell(200, 10, txt=f"Timestamp: {item['timestamp']}", ln=1)
-                pdf_name = f"challan_{idx + 1}.pdf"
-                pdf.output(pdf_name)
-                with open(pdf_name, "rb") as ticket:
-                    st.download_button(
-                        label=f"📥 Download E-Challan ({plate})",
-                        data=ticket,
-                        file_name=f"E-Challan_{plate}.pdf",
-                        mime="application/pdf",
-                        key=f"dl_{idx}",
-                        use_container_width=True,
+                try:
+                    # Generate comprehensive E-Challan with all required elements
+                    evidence_image_path = item.get("evidence_path")
+                    annotated_image_path = item.get("evidence_path")  # Same path for annotated image
+                    original_image_path = selected_item.get("path", None)
+                    
+                    # Generate the challan
+                    pdf_name = generate_challan_for_violation(
+                        violation_data=item,
+                        evidence_image_path=original_image_path,
+                        annotated_image_path=annotated_image_path,
+                        camera_id="CAM-001"  # Can be made dynamic
                     )
+                    
+                    # Clean up the PDF file after download
+                    with open(pdf_name, "rb") as ticket:
+                        st.download_button(
+                            label=f"📥 Download Official E-Challan ({plate})",
+                            data=ticket,
+                            file_name=f"E-Challan_{plate}.pdf",
+                            mime="application/pdf",
+                            key=f"dl_{idx}",
+                            use_container_width=True,
+                        )
+                    
+                    # Clean up the generated PDF file
+                    if os.path.exists(pdf_name):
+                        os.remove(pdf_name)
+                        
+                except Exception as e:
+                    st.error(f"Error generating challan: {str(e)}")
             st.markdown("---")
 
 with analytics_tab:

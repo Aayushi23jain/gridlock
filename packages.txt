@@ -1,1 +1,16 @@
+# System dependencies for Gridlock 2.0 deployment
+# Required for PDF processing and image handling
+
+# PDF processing (required by pdf2image)
 poppler-utils
+
+# OpenGL support (may be needed for some image processing operations)
+libgl1-mesa-glx
+
+# GLib library (sometimes required by pdf2image)
+libglib2.0-0
+
+# Additional libraries that may be needed for OCR
+libgomp1
+libsm6
+libxext6

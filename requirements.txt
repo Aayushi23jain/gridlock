@@ -1,10 +1,30 @@
+# Gridlock 2.0 - Traffic Violation AI System Requirements
+# Optimized for deployment without GPU (CPU-based inference)
+
+# PyTorch CPU versions from PyTorch官方源
 --extra-index-url https://download.pytorch.org/whl/cpu
-streamlit>=1.30.0
-opencv-python-headless>=4.8.0
-numpy<2.0.0
-fpdf2>=2.7.0
-pdf2image>=1.17.0
-ultralytics>=8.1.0
-easyocr>=1.7.1
-torch==2.2.0+cpu
-torchvision==0.17.0+cpu
+
+# Core framework
+streamlit>=1.30.0,<2.0.0
+
+# Computer vision and image processing
+opencv-python-headless>=4.8.0,<5.0.0
+numpy>=1.24.0,<2.0.0
+Pillow>=10.0.0,<11.0.0
+
+# Deep learning frameworks (CPU versions)
+torch>=2.3.0,<2.5.0
+torchvision>=0.18.0,<0.20.0
+
+# Object detection (YOLOv8)
+ultralytics>=8.1.0,<9.0.0
+
+# OCR for license plate reading
+easyocr>=1.7.1,<2.0.0
+
+# PDF generation and processing
+fpdf2>=2.7.0,<3.0.0
+pdf2image>=1.17.0,<2.0.0
+
+# Configuration and utilities
+PyYAML>=6.0,<7.0
