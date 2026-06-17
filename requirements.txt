@@ -1,0 +1,5 @@
+streamlit>=1.30.0
+opencv-python>=4.8.0
+numpy<2.0.0,>=1.23.5
+easyocr>=1.7.1
+fpdf>=1.7.2
