@@ -1,5 +1,1 @@
 poppler-utils
-libgl1
-libglx-mesa0
-libglib2.0-0
-freeglut3-dev
