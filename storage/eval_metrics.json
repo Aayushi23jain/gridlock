@@ -1,0 +1,10 @@
+{
+  "accuracy": 1.0,
+  "precision": 1.0,
+  "recall": 1.0,
+  "f1": 1.0,
+  "mAP": 1.0,
+  "avg_latency_ms": 7253.9,
+  "images_evaluated": 2,
+  "violations_detected": 3
+}

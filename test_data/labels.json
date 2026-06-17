@@ -1,0 +1,21 @@
+{
+  "sample_intersection_day.jpg": {
+    "violations": [
+      "Stop-Line Violation",
+      "Helmet Non-Compliance"
+    ],
+    "plates": [
+      "DL3CAM1234",
+      "MH12AB9999"
+    ]
+  },
+  "sample_intersection_night.jpg": {
+    "violations": [
+      "Stop-Line Violation",
+      "Red-Light Violation"
+    ],
+    "plates": [
+      "KA51HA9821"
+    ]
+  }
+}

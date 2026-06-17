@@ -1,135 +1,97 @@
-import cv2
-import numpy as np
-import easyocr
+"""End-to-end traffic violation analysis pipeline."""
+
+from __future__ import annotations
+
 import datetime
+import os
+import time
+
+import cv2
+
+from analytics.reports import violation_statistics
+from detection.vehicle_detector import VehicleDetector
+from detection.violation_detector import ViolationDetector
+from evidence.annotator import annotate_frame
+from ocr.plate_reader import PlateReader
+from preprocessing import preprocess_image
+from storage.database import save_violation
+
 
 class TrafficViolationPipeline:
     def __init__(self):
-        # OPTIMIZATION: Quantize OCR engine by using a lean language directory 
-        # and checking only for english letters/numbers
-        self.ocr_reader = easyocr.Reader(['en'], gpu=False, download_enabled=True)
+        self.vehicle_detector = VehicleDetector()
+        self.violation_detector = ViolationDetector()
+        self.plate_reader = PlateReader()
+        self._last_latency_ms = 0.0
+        self._stats_cache = None
 
-    def preprocess_image(self, image_path):
-        """
-        Step 1: Optimized Preprocessing Engine
-        Balances lighting, clears blur, and scales data efficiently.
-        """
-        img = cv2.imread(image_path)
-        if img is None:
-            raise FileNotFoundError(f"Source frame missing at: {image_path}")
-            
-        # OPTIMIZATION: Dynamic Spatial Downscaling
-        # Reduces pixel space size if frame exceeds default HD to save massive CPU compute
-        h, w = img.shape[:2]
-        if max(h, w) > 1080:
-            scale_factor = 1080 / max(h, w)
-            img = cv2.resize(img, (int(w * scale_factor), int(h * scale_factor)), interpolation=cv2.INTER_AREA)
+    @property
+    def last_latency_ms(self) -> float:
+        return self._last_latency_ms
 
-        # Separate luminance channel using YCrCb space mapping
-        ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-        channels = list(cv2.split(ycrcb))
-        
-        # Apply localized CLAHE contrast balancing
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        channels[0] = clahe.apply(channels[0])
-        
-        enhanced_img = cv2.merge(channels)
-        enhanced_img = cv2.cvtColor(enhanced_img, cv2.COLOR_YCrCb2BGR)
-        
-        # OPTIMIZATION: Swapped out slow Gaussian Blur for an ultra-fast box filter
-        processed_img = cv2.blur(enhanced_img, (3, 3))
-        return img, processed_img
+    def get_performance_metrics(self) -> dict:
+        stats = violation_statistics()
+        eval_metrics = self._load_eval_metrics()
+        return {
+            "latency_ms": round(self._last_latency_ms, 1),
+            "avg_confidence": stats["avg_confidence"],
+            "ocr_success_rate": stats["ocr_success_rate"],
+            "total_logged": stats["total_violations"],
+            "mAP": eval_metrics.get("mAP", 0.0),
+            "precision": eval_metrics.get("precision", 0.0),
+            "recall": eval_metrics.get("recall", 0.0),
+            "f1": eval_metrics.get("f1", 0.0),
+        }
 
-    def detect_and_classify(self, processed_img):
-        """
-        Step 2: Multi-Task Inference Layer
-        Maps spatial targets smoothly matching scaled resolution layouts.
-        """
-        h, w, _ = processed_img.shape
-        annotated_img = processed_img.copy()
-        violations = []
+    def _load_eval_metrics(self) -> dict:
+        path = os.path.join("storage", "eval_metrics.json")
+        if not os.path.exists(path):
+            return {}
+        import json
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
 
-        # High-yield bounding coordinates mapped cleanly across scaling bounds
-        violations.append({
-            "type": "Helmet Non-Compliance",
-            "confidence": 0.912,
-            "bbox": [int(w * 0.12), int(h * 0.45), int(w * 0.42), int(h * 0.92)],
-            "plate_roi": [int(h * 0.78), int(h * 0.90), int(w * 0.20), int(w * 0.35)]
-        })
-        
-        violations.append({
-            "type": "Stop-Line Violation",
-            "confidence": 0.947,
-            "bbox": [int(w * 0.55), int(h * 0.38), int(w * 0.92), int(h * 0.88)],
-            "plate_roi": [int(h * 0.72), int(h * 0.85), int(w * 0.68), int(w * 0.85)]
-        })
+    def run_pipeline(self, image_path: str, save_evidence: bool = True) -> tuple:
+        start = time.perf_counter()
+        original, processed = preprocess_image(image_path)
 
-        for v in violations:
-            x1, y1, x2, y2 = v["bbox"]
-            cv2.rectangle(annotated_img, (x1, y1), (x2, y2), (0, 0, 255), 3)
-            label_string = f"{v['type']} ({v['confidence'] * 100:.1f}%)"
-            cv2.putText(annotated_img, label_string, (x1, y1 - 12), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
-            
-        return annotated_img, violations
+        detections = self.vehicle_detector.detect(processed)
+        violations = self.violation_detector.detect_violations(processed, detections)
 
-    def extract_license_plate(self, processed_img, crop_coords):
-        """
-        Step 3: Optimized OCR Text Extraction Engine
-        Prepares cropped text blocks using custom filtering layers for higher accuracy.
-        """
-        y1, y2, x1, x2 = crop_coords
-        plate_crop = processed_img[y1:y2, x1:x2]
-        
-        if plate_crop.size == 0:
-            return "KA51HA9821", None
-            
-        # OPTIMIZATION: Text Contrast Maximization Pipeline
-        gray = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
-        
-        # Scale crop layout up slightly so small letters become easily readable
-        gray = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-        
-        # Apply unsharp masking to crisp up the text borders
-        blurred = cv2.GaussianBlur(gray, (0, 0), 3)
-        sharpened = cv2.addWeighted(gray, 1.5, blurred, -0.5, 0)
-        
-        # Adaptive OTSU thresholding converts pixels cleanly to binary black/white
-        _, binary_crop = cv2.threshold(sharpened, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        stop_lines = self.violation_detector.geometry.stop_lines
+        annotated = annotate_frame(processed, detections, violations, stop_lines)
 
-        try:
-            # OPTIMIZATION: Bypassed heavy block checks using tight runtime search parameters
-            results = self.ocr_reader.readtext(
-                binary_crop, 
-                paragraph=False, 
-                adjust_contrast=False, # Already handled via thresholding
-                workers=2              # Parallel multi-threading processing split
-            )
-            if results:
-                plate_str = max(results, key=lambda x: x[2])[1]
-                clean_plate = "".join([c for c in plate_str if c.isalnum()]).upper()
-                return clean_plate if len(clean_plate) > 4 else "DL4CNE7312", plate_crop
-        except Exception:
-            pass
-            
-        # Contextual realistic fallback variables based on regional location bounds
-        return "KA51HA9821" if x1 < 300 else "MH12TR4509", plate_crop
+        os.makedirs("storage/evidence", exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        evidence_path = ""
 
-    def run_pipeline(self, image_path):
-        """Executes full optimized end-to-end execution sequence"""
-        original, processed = self.preprocess_image(image_path)
-        annotated, violations = self.detect_and_classify(processed)
-        
         records = []
         for v in violations:
-            plate_text, crop_img = self.extract_license_plate(processed, v["plate_roi"])
-            
-            records.append({
+            plate_text, plate_conf, crop_img = self.plate_reader.extract_from_vehicle(
+                processed, v["bbox"]
+            )
+            if save_evidence:
+                evidence_path = os.path.join(
+                    "storage/evidence",
+                    f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{v['type'][:8].replace(' ', '')}.jpg",
+                )
+                cv2.imwrite(evidence_path, annotated)
+
+            record = {
                 "violation_type": v["type"],
                 "confidence": v["confidence"],
                 "license_plate": plate_text,
-                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "crop_img": crop_img
-            })
-            
-        return original, annotated, records
+                "plate_confidence": plate_conf,
+                "vehicle_class": v.get("vehicle_class", ""),
+                "bbox": v["bbox"],
+                "timestamp": timestamp,
+                "crop_img": crop_img,
+                "image_source": os.path.basename(image_path),
+                "evidence_path": evidence_path,
+                "detections_count": len(detections),
+            }
+            save_violation(record)
+            records.append(record)
+
+        self._last_latency_ms = (time.perf_counter() - start) * 1000
+        return original, annotated, records, detections
