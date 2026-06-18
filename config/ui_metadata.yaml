@@ -1,0 +1,143 @@
+# UI Metadata Configuration
+# This file contains UI-specific metadata for violations (descriptions, penalties, camera locations, etc.)
+# Core violation types are defined in detection/violation_detector.py
+
+violation_ui_metadata:
+  Helmet Non-Compliance:
+    description: "Rider not wearing approved helmet"
+    severity: "High"
+    penalty: "₹1,000 fine, license disqualification"
+    camera_locations:
+      - name: "MG Road Junction"
+        lat: 12.9716
+        lon: 77.5946
+        cam_id: "CAM-001"
+      - name: "Brigade Road"
+        lat: 12.9756
+        lon: 77.6066
+        cam_id: "CAM-002"
+    risk_level: "4/5"
+    common_times: "Peak hours (8-10 AM, 6-8 PM)"
+
+  Seatbelt Non-Compliance:
+    description: "Driver/passenger not wearing seatbelt"
+    severity: "Medium"
+    penalty: "₹1,000 fine"
+    camera_locations:
+      - name: "Residency Road"
+        lat: 12.9766
+        lon: 77.6006
+        cam_id: "CAM-003"
+      - name: "Cubbon Road"
+        lat: 12.9786
+        lon: 77.5966
+        cam_id: "CAM-004"
+    risk_level: "3/5"
+    common_times: "Throughout day"
+
+  Triple Riding:
+    description: "Three or more riders on two-wheeler"
+    severity: "High"
+    penalty: "₹500 fine per extra rider"
+    camera_locations:
+      - name: "Indiranagar 100ft Road"
+        lat: 12.9786
+        lon: 77.6406
+        cam_id: "CAM-005"
+      - name: "Koramangala Main Road"
+        lat: 12.9356
+        lon: 77.6246
+        cam_id: "CAM-006"
+    risk_level: "4/5"
+    common_times: "School/office hours"
+
+  Wrong-Side Driving:
+    description: "Vehicle driving on wrong side of road"
+    severity: "Critical"
+    penalty: "₹5,000 fine, license suspension"
+    camera_locations:
+      - name: "Richmond Road"
+        lat: 12.9666
+        lon: 77.5966
+        cam_id: "CAM-007"
+      - name: "Old Madras Road"
+        lat: 12.9886
+        lon: 77.6166
+        cam_id: "CAM-008"
+    risk_level: "5/5"
+    common_times: "Late night, early morning"
+
+  Stop-Line Violation:
+    description: "Vehicle crossing stop line at signal"
+    severity: "Medium"
+    penalty: "₹500 fine"
+    camera_locations:
+      - name: "Commercial Street"
+        lat: 12.9816
+        lon: 77.6066
+        cam_id: "CAM-009"
+      - name: "Church Street"
+        lat: 12.9736
+        lon: 77.6086
+        cam_id: "CAM-010"
+    risk_level: "2/5"
+    common_times: "Signal timing changes"
+
+  Red-Light Violation:
+    description: "Vehicle crossing intersection during red signal"
+    severity: "Critical"
+    penalty: "₹1,000 fine, license points"
+    camera_locations:
+      - name: "Mahatma Gandhi Road"
+        lat: 12.9706
+        lon: 77.6066
+        cam_id: "CAM-011"
+      - name: "Hosur Road Junction"
+        lat: 12.9146
+        lon: 77.6266
+        cam_id: "CAM-012"
+    risk_level: "5/5"
+    common_times: "Peak traffic hours"
+
+  Illegal Parking:
+    description: "Vehicle parked in no-parking zone"
+    severity: "Low"
+    penalty: "₹200 fine"
+    camera_locations:
+      - name: "Lavelle Road"
+        lat: 12.9796
+        lon: 77.6006
+        cam_id: "CAM-013"
+      - name: "Ulsoor Road"
+        lat: 12.9866
+        lon: 77.6106
+        cam_id: "CAM-014"
+    risk_level: "1/5"
+    common_times: "Business hours"
+
+# UI Theme Configuration
+ui_theme:
+  severity_colors:
+    Critical: "#ff4444"
+    High: "#ff8800"
+    Medium: "#ffcc00"
+    Low: "#44cc44"
+  
+  severity_icons:
+    Critical: "🔴"
+    High: "🟠"
+    Medium: "🟡"
+    Low: "🟢"
+
+# App Settings
+app_settings:
+  title: "Gridlock 2.0: AutoTraffic Command Center"
+  subtitle: "Automated Photo Identification & Classification for Traffic Violations"
+  page_icon: "🚨"
+  layout: "wide"
+  
+# Default Location
+default_location:
+  lat: 12.9716
+  lon: 77.5946
+  zoom: 13

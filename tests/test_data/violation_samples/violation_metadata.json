@@ -36,11 +36,6 @@
       "file_path": "test_data/violation_samples\\illegal_parking.jpg",
       "file_type": "image",
       "status": "generated"
-    },
-    "Overspeed": {
-      "file_path": "test_data/violation_samples\\overspeed_violation.mp4",
-      "file_type": "video",
-      "status": "generated"
     }
   }
 }

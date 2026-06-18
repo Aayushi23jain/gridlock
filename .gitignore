@@ -48,8 +48,6 @@ test_data/*.avi
 test_data/violation_samples/*
 !test_data/.gitkeep
 !test_data/labels.json
-transient_workspace/*
-!transient_workspace/.gitkeep
 
 # Model files (can be large, comment out if including)
 # yolov8n.pt

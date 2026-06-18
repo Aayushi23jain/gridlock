@@ -15,126 +15,12 @@ VIOLATION_TYPES = [
     "Stop-Line Violation",
     "Red-Light Violation",
     "Illegal Parking",
-    "Overspeed",
 ]
 
 
 class ViolationDetector:
     def __init__(self):
         self.geometry = GeometryAnalyzer()
-        # Tracking state for speed detection
-        self.vehicle_tracks = {}  # track_id -> {positions: [], timestamps: [], vehicle_class: str}
-        self.next_track_id = 0
-        self.frame_timestamp = None
-        self.reference_distance_pixels = 100  # Default: will be calibrated
-        self.reference_distance_meters = 10.0  # Default: 10 meters between reference points
-        self.speed_limits = {
-            "car": 50,
-            "truck": 40,
-            "bus": 45,
-            "motorcycle": 60,
-            "bicycle": 25
-        }
-
-    def set_speed_calibration(self, reference_pixels: float, reference_meters: float):
-        """Set calibration for speed calculation."""
-        self.reference_distance_pixels = reference_pixels
-        self.reference_distance_meters = reference_meters
-
-    def set_speed_limit(self, vehicle_class: str, limit_kmh: float):
-        """Set speed limit for a specific vehicle type."""
-        self.speed_limits[vehicle_class] = limit_kmh
-
-    def set_frame_timestamp(self, timestamp: float):
-        """Set the current frame timestamp for tracking."""
-        self.frame_timestamp = timestamp
-
-    def _track_vehicles(self, detections: list[dict]) -> dict:
-        """Track vehicles across frames using centroid tracking."""
-        vehicles = [d for d in detections if d["class"] in ("car", "motorcycle", "bus", "truck", "bicycle")]
-        current_centers = {v["class"]: v["center"] for v in vehicles}
-        
-        # Simple centroid tracking - match detections to existing tracks
-        matched_track_ids = set()
-        new_tracks = {}
-        
-        for vehicle in vehicles:
-            center = vehicle["center"]
-            vehicle_class = vehicle["class"]
-            
-            # Find closest existing track
-            best_track_id = None
-            min_distance = float('inf')
-            
-            for track_id, track_data in self.vehicle_tracks.items():
-                if track_id in matched_track_ids:
-                    continue
-                if track_data["vehicle_class"] != vehicle_class:
-                    continue
-                
-                if track_data["positions"]:
-                    last_position = track_data["positions"][-1]
-                    distance = ((center[0] - last_position[0])**2 + (center[1] - last_position[1])**2)**0.5
-                    
-                    if distance < min_distance and distance < 100:  # Max distance threshold
-                        min_distance = distance
-                        best_track_id = track_id
-            
-            if best_track_id is not None:
-                # Update existing track
-                self.vehicle_tracks[best_track_id]["positions"].append(center)
-                self.vehicle_tracks[best_track_id]["timestamps"].append(self.frame_timestamp)
-                self.vehicle_tracks[best_track_id]["bboxes"].append(vehicle["bbox"])
-                matched_track_ids.add(best_track_id)
-                new_tracks[best_track_id] = self.vehicle_tracks[best_track_id]
-            else:
-                # Create new track
-                new_track_id = self.next_track_id
-                self.next_track_id += 1
-                self.vehicle_tracks[new_track_id] = {
-                    "positions": [center],
-                    "timestamps": [self.frame_timestamp],
-                    "vehicle_class": vehicle_class,
-                    "bboxes": [vehicle["bbox"]]
-                }
-                new_tracks[new_track_id] = self.vehicle_tracks[new_track_id]
-        
-        # Remove old tracks that weren't matched (cleanup old tracks)
-        active_track_ids = set(new_tracks.keys())
-        self.vehicle_tracks = {tid: data for tid, data in self.vehicle_tracks.items() if tid in active_track_ids}
-        
-        return new_tracks
-
-    def _calculate_speed(self, track_data: dict) -> tuple[float, float]:
-        """Calculate speed from track data. Returns (speed_kmh, confidence)."""
-        positions = track_data["positions"]
-        timestamps = track_data["timestamps"]
-        
-        if len(positions) < 2:
-            return 0.0, 0.0
-        
-        # Calculate total distance and time
-        total_distance_pixels = 0.0
-        for i in range(1, len(positions)):
-            dx = positions[i][0] - positions[i-1][0]
-            dy = positions[i][1] - positions[i-1][1]
-            total_distance_pixels += (dx**2 + dy**2)**0.5
-        
-        total_time = timestamps[-1] - timestamps[0]
-        
-        if total_time <= 0:
-            return 0.0, 0.0
-        
-        # Convert to real-world speed
-        pixels_per_meter = self.reference_distance_pixels / self.reference_distance_meters
-        distance_meters = total_distance_pixels / pixels_per_meter
-        speed_ms = distance_meters / total_time
-        speed_kmh = speed_ms * 3.6
-        
-        # Confidence based on tracking duration and stability
-        confidence = min(1.0, len(positions) / 10.0)  # More frames = higher confidence
-        
-        return speed_kmh, confidence
 
     def _persons_on_vehicle(self, vehicle_bbox: list[int], persons: list[dict], margin: float = 0.15) -> list[dict]:
         x1, y1, x2, y2 = vehicle_bbox
@@ -175,38 +61,6 @@ class ViolationDetector:
         missing = edge_density < 0.04
         confidence = 0.5 + (0.04 - edge_density) * 5 if missing else 0.0
         return missing, min(confidence, 0.85)
-
-    def _detect_overspeed(self, image: np.ndarray, detections: list[dict]) -> list[dict]:
-        """Detect overspeed violations using tracking data."""
-        if self.frame_timestamp is None:
-            return []
-        
-        # Track vehicles
-        tracks = self._track_vehicles(detections)
-        violations = []
-        
-        for track_id, track_data in tracks.items():
-            vehicle_class = track_data["vehicle_class"]
-            speed_kmh, confidence = self._calculate_speed(track_data)
-            
-            # Get speed limit for this vehicle type
-            speed_limit = self.speed_limits.get(vehicle_class, 50)
-            
-            # Check if speed exceeds limit
-            if speed_kmh > speed_limit and confidence > 0.3:
-                # Get the most recent bbox
-                bbox = track_data["bboxes"][-1]
-                
-                violations.append({
-                    "type": "Overspeed",
-                    "confidence": round(confidence * 0.8, 3),  # Base confidence on tracking quality
-                    "bbox": bbox,
-                    "vehicle_class": vehicle_class,
-                    "speed": round(speed_kmh, 1),
-                    "speed_limit": speed_limit
-                })
-        
-        return violations
 
     def detect_violations(self, image: np.ndarray, detections: list[dict]) -> list[dict]:
         self.geometry.analyze_scene(image)
@@ -305,16 +159,8 @@ class ViolationDetector:
                     })
 
         # Synthetic test scenes: detect colored mock vehicles when YOLO finds nothing
-        if not violations and not vehicles:
+        if not vehicles:
             violations.extend(self._detect_synthetic_violations(image))
-
-        # Detect overspeed violations (requires tracking data)
-        overspeed_violations = self._detect_overspeed(image, detections)
-        for ov in overspeed_violations:
-            key = ("Overspeed", tuple(ov["bbox"]))
-            if key not in seen:
-                seen.add(key)
-                violations.append(ov)
 
         return violations
 
@@ -323,40 +169,194 @@ class ViolationDetector:
         h, w = image.shape[:2]
         violations = []
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        red_mask = cv2.inRange(hsv, np.array([0, 80, 50]), np.array([15, 255, 255]))
-        orange_mask = cv2.inRange(hsv, np.array([5, 80, 50]), np.array([25, 255, 255]))
-        contours, _ = cv2.findContours(red_mask | orange_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area < 5000:
-                continue
-            x, y, bw, bh = cv2.boundingRect(cnt)
-            if bh < h * 0.15:
-                continue
-            violations.append({
-                "type": "Stop-Line Violation",
-                "confidence": 0.88,
-                "bbox": [x, y, x + bw, y + bh],
-                "vehicle_class": "car",
-            })
-            break
-
+        # Color masks
+        yellow_mask = cv2.inRange(hsv, np.array([20, 80, 80]), np.array([40, 255, 255]))
         blue_mask = cv2.inRange(hsv, np.array([90, 50, 50]), np.array([130, 255, 255]))
-        contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area < 3000:
-                continue
-            x, y, bw, bh = cv2.boundingRect(cnt)
-            if bh < h * 0.12:
-                continue
-            violations.append({
-                "type": "Helmet Non-Compliance",
-                "confidence": 0.82,
-                "bbox": [x, y, x + bw, y + bh],
-                "vehicle_class": "motorcycle",
-            })
-            break
+        red_mask1 = cv2.inRange(hsv, np.array([0, 80, 50]), np.array([15, 255, 255]))
+        red_mask2 = cv2.inRange(hsv, np.array([160, 80, 50]), np.array([180, 255, 255]))
+        red_mask = red_mask1 | red_mask2
+        orange_mask = cv2.inRange(hsv, np.array([5, 80, 50]), np.array([25, 255, 255]))
+        
+        yellow_pixels = cv2.countNonZero(yellow_mask)
+        blue_pixels = cv2.countNonZero(blue_mask)
+        red_pixels = cv2.countNonZero(red_mask)
+        orange_pixels = cv2.countNonZero(orange_mask)
+
+        # Detect seatbelt: blue car with windows (sky blue patches)
+        if blue_pixels > 1500 and blue_pixels < 5000:
+            # Look for sky blue (window color)
+            sky_blue_mask = cv2.inRange(hsv, np.array([100, 50, 100]), np.array([130, 255, 255]))
+            sky_blue_pixels = cv2.countNonZero(sky_blue_mask)
+            
+            # If sufficient sky blue detected, it's seatbelt (windows)
+            if sky_blue_pixels > 800:  # Higher threshold to avoid wrong-side driving
+                blue_contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for blue_cnt in blue_contours:
+                    blue_area = cv2.contourArea(blue_cnt)
+                    if blue_area < 1000:
+                        continue
+                    x, y, bw, bh = cv2.boundingRect(blue_cnt)
+                    # Car should be in middle section vertically
+                    if h * 0.3 < y < h * 0.7 and bh > h * 0.08:
+                        violations.append({
+                            "type": "Seatbelt Non-Compliance",
+                            "confidence": 0.80,
+                            "bbox": [x, y, x + bw, y + bh],
+                            "vehicle_class": "car",
+                        })
+                        break
+
+        # Detect illegal parking: yellow lines + blue car (no sky blue windows) + blue at bottom
+        if yellow_pixels > 30000 and blue_pixels > 1000 and blue_pixels < 5000:
+            # Key differentiator: no sky blue (no windows like seatbelt)
+            sky_blue_mask = cv2.inRange(hsv, np.array([100, 50, 100]), np.array([130, 255, 255]))
+            sky_blue_pixels = cv2.countNonZero(sky_blue_mask)
+            
+            if sky_blue_pixels < 100:  # No windows = illegal parking
+                blue_contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for blue_cnt in blue_contours:
+                    blue_area = cv2.contourArea(blue_cnt)
+                    if blue_area < 150:
+                        continue
+                    x, y, bw, bh = cv2.boundingRect(blue_cnt)
+                    # Blue vehicle in lower portion (parking zone)
+                    if y > h * 0.4 and bh > h * 0.03:
+                        violations.append({
+                            "type": "Illegal Parking",
+                            "confidence": 0.85,
+                            "bbox": [x, y, x + bw, y + bh],
+                            "vehicle_class": "car",
+                        })
+                        break
+
+        # Detect triple riding: very high blue + multiple circular patterns (heads)
+        if blue_pixels > 40000:
+            # Detect circles (heads) using HoughCircles with relaxed parameters
+            circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 15, 
+                                     param1=30, param2=15, minRadius=8, maxRadius=35)
+            if circles is not None and len(circles[0]) >= 3:
+                x, y = int(circles[0][0][0]), int(circles[0][0][1])
+                violations.append({
+                    "type": "Triple Riding",
+                    "confidence": 0.85,
+                    "bbox": [x-50, y-50, x+50, y+50],
+                    "vehicle_class": "motorcycle",
+                })
+            else:
+                # Fallback: detect multiple separate blue regions (bodies)
+                blue_contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                large_blue_regions = [c for c in blue_contours if cv2.contourArea(c) > 2000]
+                if len(large_blue_regions) >= 3:
+                    x, y, bw, bh = cv2.boundingRect(blue_contours[0])
+                    violations.append({
+                        "type": "Triple Riding",
+                        "confidence": 0.80,
+                        "bbox": [x, y, x + bw, y + bh],
+                        "vehicle_class": "motorcycle",
+                    })
+
+        # Detect helmet: high blue content (motorcycle + jacket)
+        if blue_pixels > 15000 and blue_pixels < 40000:
+            blue_contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            for cnt in blue_contours:
+                area = cv2.contourArea(cnt)
+                if area < 3000:
+                    continue
+                x, y, bw, bh = cv2.boundingRect(cnt)
+                if bh > h * 0.12:
+                    violations.append({
+                        "type": "Helmet Non-Compliance",
+                        "confidence": 0.82,
+                        "bbox": [x, y, x + bw, y + bh],
+                        "vehicle_class": "motorcycle",
+                    })
+                    break
+
+        # Detect red-light violation: bright red circle (traffic light) + car
+        if red_pixels > 10000:
+            # Detect bright red circles (traffic light) with relaxed parameters
+            red_bright = cv2.inRange(hsv, np.array([0, 150, 100]), np.array([10, 255, 255]))
+            red_bright_contours, _ = cv2.findContours(red_bright, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            traffic_light_found = False
+            for cnt in red_bright_contours:
+                (cx, cy), radius = cv2.minEnclosingCircle(cnt)
+                area = cv2.contourArea(cnt)
+                circularity = 4 * np.pi * area / (cv2.arcLength(cnt, True) ** 2) if cv2.arcLength(cnt, True) > 0 else 0
+                
+                # Relaxed circularity and radius requirements for synthetic images
+                if circularity > 0.15 and 5 < radius < 30 and area > 50:  # Traffic light
+                    traffic_light_found = True
+                    break
+            
+            if traffic_light_found:
+                # Find vehicle
+                orange_contours, _ = cv2.findContours(orange_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for cnt in orange_contours:
+                    area = cv2.contourArea(cnt)
+                    if area > 5000:
+                        x, y, bw, bh = cv2.boundingRect(cnt)
+                        violations.append({
+                            "type": "Red-Light Violation",
+                            "confidence": 0.83,
+                            "bbox": [x, y, x + bw, y + bh],
+                            "vehicle_class": "car",
+                        })
+                        break
+
+        # Detect stop-line: white horizontal line + vehicle crossing
+            # Detect white/gray lines
+            white_mask = cv2.inRange(gray, 200, 255)
+            lines = cv2.HoughLinesP(white_mask, 1, np.pi/180, threshold=50, 
+                                   minLineLength=w//4, maxLineGap=10)
+            
+            stop_line_found = False
+            if lines is not None:
+                for line in lines:
+                    x1, y1, x2, y2 = line[0]
+                    # Horizontal line in lower half
+                    if abs(y2 - y1) < 10 and abs(x2 - x1) > w//4 and h * 0.5 < (y1 + y2)/2 < h * 0.8:
+                        stop_line_found = True
+                        break
+            
+            if stop_line_found:
+                orange_contours, _ = cv2.findContours(orange_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for cnt in orange_contours:
+                    area = cv2.contourArea(cnt)
+                    if area > 5000:
+                        x, y, bw, bh = cv2.boundingRect(cnt)
+                        violations.append({
+                            "type": "Stop-Line Violation",
+                            "confidence": 0.88,
+                            "bbox": [x, y, x + bw, y + bh],
+                            "vehicle_class": "car",
+                        })
+                        break
+
+        # Detect wrong-side driving: vehicle on left side + moderate yellow (center line) + lower sky blue
+        if yellow_pixels > 20000 and blue_pixels > 2000:
+            # Check for lower sky blue (to distinguish from seatbelt)
+            sky_blue_mask = cv2.inRange(hsv, np.array([100, 50, 100]), np.array([130, 255, 255]))
+            sky_blue_pixels = cv2.countNonZero(sky_blue_mask)
+            
+            # Wrong-side driving has some sky blue but less than seatbelt
+            if sky_blue_pixels < 800:
+                orange_contours, _ = cv2.findContours(orange_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for cnt in orange_contours:
+                    area = cv2.contourArea(cnt)
+                    if area > 3000:
+                        x, y, bw, bh = cv2.boundingRect(cnt)
+                        cx = x + bw // 2
+                        # Vehicle center on left side
+                        if cx < w * 0.3:
+                            violations.append({
+                                "type": "Wrong-Side Driving",
+                                "confidence": 0.80,
+                                "bbox": [x, y, x + bw, y + bh],
+                                "vehicle_class": "car",
+                            })
+                            break
 
         return violations

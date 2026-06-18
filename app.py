@@ -9,15 +9,34 @@ try:
 except ImportError:
     PDF_SUPPORT = False
 
+# Import violation types from existing detection module
+from detection.violation_detector import VIOLATION_TYPES
+
+# Load UI metadata dynamically from configuration
+from config import (
+    get_violation_metadata,
+    get_severity_colors,
+    get_severity_icons,
+    get_app_settings,
+    get_default_location
+)
+
+# Load configuration data
+VIOLATION_DATA = {vtype: get_violation_metadata(vtype) for vtype in VIOLATION_TYPES}
+SEVERITY_COLORS = get_severity_colors()
+SEVERITY_ICONS = get_severity_icons()
+APP_SETTINGS = get_app_settings()
+DEFAULT_LOCATION = get_default_location()
+
 from pipeline import TrafficViolationPipeline
-from analytics.reports import violation_statistics, generate_summary_report, clear_all_violation_data
+from analytics.reports import violation_statistics, generate_summary_report
 from storage.database import search_violations
 from evidence.challan_generator import generate_challan_for_violation
 
 st.set_page_config(
-    layout="wide",
-    page_title="AutoTraffic Command Center",
-    page_icon="🚨",
+    layout=APP_SETTINGS.get('layout', 'wide'),
+    page_title=APP_SETTINGS.get('title', 'AutoTraffic Command Center'),
+    page_icon=APP_SETTINGS.get('page_icon', '🚨'),
 )
 
 st.markdown("""
@@ -50,6 +69,49 @@ st.markdown("""
             display: inline-block;
             margin-bottom: 8px;
         }
+        .badge-high {
+            background: #ff8800;
+            color: #ffffff;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .badge-medium {
+            background: #ffcc00;
+            color: #000000;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .badge-low {
+            background: #44cc44;
+            color: #000000;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .violation-details {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+        .camera-info {
+            background: rgba(75, 123, 236, 0.1);
+            border-left: 4px solid #4b7bec;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 8px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -62,11 +124,20 @@ def get_pipeline():
 pipeline = get_pipeline()
 metrics = pipeline.get_performance_metrics()
 
-st.markdown("""
+# Get violation statistics for severity indicators
+stats = violation_statistics()
+high_risk_count = 0
+if stats["by_type"]:
+    for vtype in stats["by_type"]:
+        if vtype in VIOLATION_DATA:
+            if VIOLATION_DATA[vtype]['severity'] in ['Critical', 'High']:
+                high_risk_count += stats["by_type"][vtype]
+
+st.markdown(f"""
     <div class="header-container">
-        <h1 style='margin:0; font-size:2.2rem; font-weight:800;'>🚨 Gridlock 2.0: AutoTraffic Command Center</h1>
+        <h1 style='margin:0; font-size:2.2rem; font-weight:800;'>{APP_SETTINGS.get('page_icon', '🚨')} {APP_SETTINGS.get('title', 'AutoTraffic Command Center')}</h1>
         <p style='color:#8a90a6; font-size:1.05rem; margin: 4px 0 0 0;'>
-            Automated Photo Identification & Classification for Traffic Violations
+            {APP_SETTINGS.get('subtitle', 'Automated Photo Identification & Classification for Traffic Violations')}
         </p>
     </div>
 """, unsafe_allow_html=True)
@@ -75,7 +146,10 @@ col1, col2, col3, col4 = st.columns(4)
 col1.metric("mAP (eval)", f"{metrics['mAP'] * 100:.1f}%" if metrics['mAP'] else "Run evaluate.py")
 col2.metric("Pipeline Latency", f"{metrics['latency_ms']:.0f} ms" if metrics['latency_ms'] else "—")
 col3.metric("OCR Success Rate", f"{metrics['ocr_success_rate'] * 100:.1f}%")
-col4.metric("Violations Logged", metrics["total_logged"])
+
+# Add severity indicator to main metrics
+severity_icon = SEVERITY_ICONS.get("Critical", "🔴") if high_risk_count > 5 else SEVERITY_ICONS.get("High", "🟠") if high_risk_count > 2 else SEVERITY_ICONS.get("Medium", "🟡")
+col4.metric(f"{severity_icon} High-Risk Violations", high_risk_count)
 
 main_tab, analytics_tab = st.tabs(["🔍 Detection Workspace", "📊 Analytics & Reports"])
 
@@ -98,55 +172,79 @@ with main_tab:
             uploaded_file = st.file_uploader(
                 upload_label,
                 type=upload_types,
+                key="file_uploader_main",
+                help="Upload traffic images or archives for violation detection",
             )
-            st.markdown("**Sandbox Presets:**")
-            load_day = st.button("☀️ Analyze Daytime Feed Snapshot", use_container_width=True)
-            load_night = st.button("🌙 Analyze Night-Vision Feed Snapshot", use_container_width=True)
+            # st.markdown("**Sandbox Presets:**")
+            # load_day = st.button("☀️ Analyze Daytime Feed Snapshot", use_container_width=True)
+            # load_night = st.button("🌙 Analyze Night-Vision Feed Snapshot", use_container_width=True)
 
         with feed_type[1]:
             st.info("Live RTSP requires camera URL configuration. Toggle simulates a preset feed.")
-            if st.toggle("Connect to Intersection Cam-04 Node"):
+            if st.toggle("Connect to Intersection Cam-04 Node", key="camera_toggle"):
                 load_day = True
 
     processing_queue = []
-    os.makedirs("transient_workspace", exist_ok=True)
 
+    # File upload processing without transient workspace
     if uploaded_file is not None:
         ext = uploaded_file.name.split(".")[-1].lower()
         if ext in ["jpg", "jpeg", "png"]:
-            path = "transient_workspace/live_workspace_frame.jpg"
-            with open(path, "wb") as f:
+            # Process single image using temporary file
+            import tempfile
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as f:
                 f.write(uploaded_file.getbuffer())
-            processing_queue.append({"name": uploaded_file.name, "path": path})
+                temp_path = f.name
+            processing_queue.append({"name": uploaded_file.name, "path": temp_path})
+            st.success(f"✅ Uploaded: {uploaded_file.name}")
         elif ext == "zip":
-            zip_path = f"transient_workspace/{uploaded_file.name}"
-            with open(zip_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            with zipfile.ZipFile(zip_path, "r") as zf:
-                zf.extractall("transient_workspace/extracted_zip")
-            for root, _, files in os.walk("transient_workspace/extracted_zip"):
-                for file in files:
-                    if file.lower().endswith((".png", ".jpg", ".jpeg")):
-                        processing_queue.append({
-                            "name": file,
-                            "path": os.path.join(root, file),
-                        })
+            # Process ZIP file using temporary directory
+            import tempfile
+            import zipfile
+            with tempfile.TemporaryDirectory() as temp_dir:
+                zip_path = os.path.join(temp_dir, uploaded_file.name)
+                with open(zip_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                extract_dir = os.path.join(temp_dir, "extracted")
+                os.makedirs(extract_dir, exist_ok=True)
+                
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    zf.extractall(extract_dir)
+                
+                for root, _, files in os.walk(extract_dir):
+                    for file in files:
+                        if file.lower().endswith((".png", ".jpg", ".jpeg")):
+                            # Copy to temp directory for processing
+                            temp_file_path = os.path.join(temp_dir, file)
+                            processing_queue.append({
+                                "name": file,
+                                "path": temp_file_path,
+                            })
+                if processing_queue:
+                    st.success(f"✅ Extracted {len(processing_queue)} images from ZIP")
+                else:
+                    st.error("❌ No valid images found in ZIP")
         elif ext == "pdf":
             if not PDF_SUPPORT:
-                st.error("PDF processing is not available on this deployment platform. Please upload images (.jpg, .png) instead.")
+                st.error("❌ PDF processing is not available on this deployment platform. Please upload images (.jpg, .png) instead.")
             else:
-                pdf_path = f"transient_workspace/{uploaded_file.name}"
+                # Process PDF file using temporary directory
+                import tempfile
+                pdf_path = os.path.join(tempfile.gettempdir(), uploaded_file.name)
                 with open(pdf_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
+                
                 try:
                     for idx, page in enumerate(convert_from_path(pdf_path, dpi=120)):
-                        page_path = f"transient_workspace/pdf_page_{idx}.jpg"
+                        page_path = os.path.join(tempfile.gettempdir(), f"pdf_page_{idx}.jpg")
                         page.save(page_path, "JPEG")
                         processing_queue.append({"name": f"Page {idx + 1}", "path": page_path})
+                    if processing_queue:
+                        st.success(f"✅ Converted {len(processing_queue)} pages from PDF")
                 except Exception as e:
-                    st.error(f"PDF parse error: {e}")
+                    st.error(f"❌ PDF parse error: {e}")
 
-    elif load_day:
+    if load_day:
         day_path = "test_data/sample_intersection_day.jpg"
         if os.path.exists(day_path):
             processing_queue.append({"name": "Preset: Day Intersection", "path": day_path})
@@ -165,7 +263,12 @@ with main_tab:
     if processing_queue:
         if len(processing_queue) > 1:
             with ctrl_panel:
-                sel_name = st.selectbox("Select frame", [i["name"] for i in processing_queue])
+                sel_name = st.selectbox(
+                    "Select frame", 
+                    [i["name"] for i in processing_queue],
+                    key="frame_selector",
+                    help="Choose which frame to analyze from the processing queue"
+                )
                 selected_item = next(i for i in processing_queue if i["name"] == sel_name)
         else:
             selected_item = processing_queue[0]
@@ -186,21 +289,75 @@ with main_tab:
         st.markdown("### 🗃️ Violations & E-Challan Log")
         st.markdown("---")
 
-        with st.expander("📍 Camera Location", expanded=False):
-            st.map([{"lat": 12.9716, "lon": 77.5946}], zoom=13)
+        # Dynamic camera location based on violations detected
+        if records:
+            # Get camera locations from the first violation type (all violations in same frame share camera)
+            first_violation = records[0]['violation_type']
+            if first_violation in VIOLATION_DATA:
+                camera_locations = VIOLATION_DATA[first_violation]['camera_locations']
+                primary_camera = camera_locations[0]
+                
+                with st.expander(f"📍 Camera Location: {primary_camera['name']}", expanded=False):
+                    st.markdown(f"**Camera ID:** {primary_camera['cam_id']}")
+                    st.markdown(f"**Location:** {primary_camera['name']}")
+                    st.markdown(f"**Coordinates:** {primary_camera['lat']:.4f}, {primary_camera['lon']:.4f}")
+                    st.map([{"lat": primary_camera['lat'], "lon": primary_camera['lon']}], zoom=13)
+                    
+                    if len(camera_locations) > 1:
+                        st.markdown("**Alternative Cameras for this violation type:**")
+                        for cam in camera_locations[1:]:
+                            st.markdown(f"- {cam['name']} (ID: {cam['cam_id']})")
+            else:
+                # Fallback to default location if violation type not found
+                with st.expander("📍 Camera Location (Default)", expanded=False):
+                    st.map([{"lat": DEFAULT_LOCATION['lat'], "lon": DEFAULT_LOCATION['lon']}], zoom=DEFAULT_LOCATION.get('zoom', 13))
+        else:
+            with st.expander("📍 Camera Location (Default)", expanded=False):
+                st.map([{"lat": DEFAULT_LOCATION['lat'], "lon": DEFAULT_LOCATION['lon']}], zoom=DEFAULT_LOCATION.get('zoom', 13))
 
         if not records:
             st.info("No traffic violations detected in this frame.")
 
         for idx, item in enumerate(records):
+            violation_type = item['violation_type']
+            violation_info = VIOLATION_DATA.get(violation_type, {})
+            severity = violation_info.get('severity', 'Medium')
+            severity_color = SEVERITY_COLORS.get(severity, '#ffcc00')
+            
+            # Create severity badge class
+            severity_badge_class = f"badge-{severity.lower()}" if severity.lower() in ['critical', 'high', 'medium', 'low'] else "badge-medium"
+            
             st.markdown(f"""
-                <div class="infraction-block">
-                    <span class="badge-critical">VIOLATION</span>
+                <div class="infraction-block" style="border-left-color: {severity_color}">
+                    <span class="{severity_badge_class}">{severity.upper()}</span>
                     <p style="margin:4px 0 0 0; font-size:1.2rem; font-weight:800;">
-                        #{idx + 1}: {item['violation_type']}
+                        #{idx + 1}: {violation_type}
                     </p>
                 </div>
             """, unsafe_allow_html=True)
+            
+            # Show violation-specific details
+            if violation_info:
+                with st.expander("📋 Violation Details", expanded=False):
+                    st.markdown(f"""
+                        <div class="violation-details">
+                            <p style="margin:0 0 8px 0; font-size:0.9rem; color:#8a90a6;">{violation_info.get('description', 'No description available')}</p>
+                            <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                                <div>
+                                    <span style="color:#ff4b4b; font-weight:700;">Penalty:</span>
+                                    <span style="color:#f8f9fa;">{violation_info.get('penalty', 'N/A')}</span>
+                                </div>
+                                <div>
+                                    <span style="color:#ff8800; font-weight:700;">Risk Level:</span>
+                                    <span style="color:#f8f9fa;">{violation_info.get('risk_level', 'N/A')}</span>
+                                </div>
+                                <div>
+                                    <span style="color:#4b7bec; font-weight:700;">Common Time:</span>
+                                    <span style="color:#f8f9fa;">{violation_info.get('common_times', 'N/A')}</span>
+                                </div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
 
             col_meta, col_roi, col_action = st.columns([1.2, 1, 1])
             with col_meta:
@@ -223,12 +380,17 @@ with main_tab:
                     annotated_image_path = item.get("evidence_path")  # Same path for annotated image
                     original_image_path = selected_item.get("path", None)
                     
-                    # Generate the challan
+                    # Generate the challan with dynamic camera ID
+                    camera_id = "CAM-001"  # Default fallback
+                    if violation_type in VIOLATION_DATA:
+                        camera_locations = VIOLATION_DATA[violation_type]['camera_locations']
+                        camera_id = camera_locations[0]['cam_id']
+                    
                     pdf_name = generate_challan_for_violation(
                         violation_data=item,
                         evidence_image_path=original_image_path,
                         annotated_image_path=annotated_image_path,
-                        camera_id="CAM-001"  # Can be made dynamic
+                        camera_id=camera_id
                     )
                     
                     # Clean up the PDF file after download
@@ -254,38 +416,120 @@ with analytics_tab:
     st.markdown("### 📊 Violation Analytics & Searchable Records")
 
     stats = violation_statistics()
-    a1, a2, a3 = st.columns(3)
+    
+    # Enhanced metrics with severity breakdown
+    a1, a2, a3, a4 = st.columns(4)
     a1.metric("Total Violations", stats["total_violations"])
     a2.metric("Avg Confidence", f"{stats['avg_confidence'] * 100:.1f}%")
     a3.metric("OCR Success", f"{stats['ocr_success_rate'] * 100:.1f}%")
-
+    
+    # Calculate high-severity violations
+    high_severity_count = 0
     if stats["by_type"]:
-        st.bar_chart(stats["by_type"])
-    else:
-        st.info("No violations logged yet. Process an image in the Detection tab.")
+        for vtype in stats["by_type"]:
+            if vtype in VIOLATION_DATA:
+                if VIOLATION_DATA[vtype]['severity'] in ['Critical', 'High']:
+                    high_severity_count += stats["by_type"][vtype]
+    a4.metric("High Severity", high_severity_count)
 
-    if stats["daily_counts"]:
-        st.line_chart(stats["daily_counts"])
+    # Enhanced visual analytics
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 📈 Violations by Type")
+        if stats["by_type"]:
+            # Add color coding to the bar chart based on severity
+            chart_data = stats["by_type"]
+            st.bar_chart(chart_data)
+            
+            # Show severity breakdown
+            st.markdown("**Severity Breakdown:**")
+            severity_counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
+            for vtype, count in chart_data.items():
+                if vtype in VIOLATION_DATA:
+                    severity = VIOLATION_DATA[vtype]['severity']
+                    severity_counts[severity] += count
+            
+            for severity, count in severity_counts.items():
+                if count > 0:
+                    color = SEVERITY_COLORS.get(severity, '#ffcc00')
+                    st.markdown(f"<span style='color:{color}; font-weight:bold;'>● {severity}:</span> {count} violations", unsafe_allow_html=True)
+        else:
+            st.info("No violations logged yet. Process an image in the Detection tab.")
+    
+    with col2:
+        st.markdown("#### 📅 Temporal Analysis")
+        if stats["daily_counts"]:
+            st.line_chart(stats["daily_counts"])
+        else:
+            st.info("No temporal data available yet.")
+        
+        # Peak violation times analysis
+        if stats["by_type"]:
+            st.markdown("**Peak Risk Times:**")
+            for vtype, count in sorted(stats["by_type"].items(), key=lambda x: x[1], reverse=True)[:3]:
+                if vtype in VIOLATION_DATA:
+                    common_time = VIOLATION_DATA[vtype]['common_times']
+                    risk_level = VIOLATION_DATA[vtype]['risk_level']
+                    st.markdown(f"• **{vtype}**: {common_time} (Risk: {risk_level})")
 
     st.markdown("#### 🔎 Search Records")
-    search_q = st.text_input("Search by plate or image name")
-    type_filter = st.selectbox(
-        "Filter by violation type",
-        ["All"] + list(stats["by_type"].keys()) if stats["by_type"] else ["All"],
-    )
+    col_search, col_filter_type, col_filter_severity = st.columns([2, 1, 1])
+    
+    with col_search:
+        search_q = st.text_input(
+            "Search by plate or image name",
+            key="search_input",
+            help="Enter license plate number or image filename to search records",
+            placeholder="e.g., DL12AB3456 or image.jpg"
+        )
+    
+    with col_filter_type:
+        type_filter = st.selectbox(
+            "Filter by Type",
+            ["All"] + list(stats["by_type"].keys()) if stats["by_type"] else ["All"],
+            key="type_filter_select",
+            help="Filter violation records by type"
+        )
+    
+    with col_filter_severity:
+        severity_filter = st.selectbox(
+            "Filter by Severity",
+            ["All", "Critical", "High", "Medium", "Low"],
+            key="severity_filter_select",
+            help="Filter violation records by severity level"
+        )
+    
     vtype = "" if type_filter == "All" else type_filter
     rows = search_violations(query=search_q, violation_type=vtype, limit=50)
+    
+    # Apply severity filter
+    if severity_filter != "All" and rows:
+        filtered_rows = []
+        for row in rows:
+            vtype = row['violation_type']
+            if vtype in VIOLATION_DATA:
+                if VIOLATION_DATA[vtype]['severity'] == severity_filter:
+                    filtered_rows.append(row)
+        rows = filtered_rows
 
     if rows:
-        display_rows = [{
-            "ID": r["id"],
-            "Type": r["violation_type"],
-            "Confidence": f"{r['confidence'] * 100:.1f}%",
-            "Plate": r["license_plate"],
-            "Vehicle": r.get("vehicle_class", ""),
-            "Source": r.get("image_source", ""),
-            "Timestamp": r["timestamp"],
-        } for r in rows]
+        display_rows = []
+        for r in rows:
+            vtype = r["violation_type"]
+            severity = VIOLATION_DATA.get(vtype, {}).get('severity', 'Medium') if vtype in VIOLATION_DATA else 'Medium'
+            severity_icon = SEVERITY_ICONS.get(severity, '⚪')
+            
+            display_rows.append({
+                "ID": r["id"],
+                "Severity": f"{severity_icon} {severity}",
+                "Type": r["violation_type"],
+                "Confidence": f"{r['confidence'] * 100:.1f}%",
+                "Plate": r["license_plate"],
+                "Vehicle": r.get("vehicle_class", ""),
+                "Source": r.get("image_source", ""),
+                "Timestamp": r["timestamp"],
+            })
         st.dataframe(display_rows, use_container_width=True)
     else:
         st.caption("No matching records.")
@@ -295,29 +539,14 @@ with analytics_tab:
         data=generate_summary_report(),
         file_name="violation_report.txt",
         mime="text/plain",
+        key="download_report_button",
     )
 
     st.markdown("---")
-    st.markdown("#### 🗑️ Data Management")
-    
-    col_delete1, col_delete2 = st.columns([3, 1])
-    
-    with col_delete1:
-        st.warning("⚠️ This will permanently delete all violation records from the database. This action cannot be undone.")
-    
-    with col_delete2:
-        if st.button("🗑️ Delete All Records", type="secondary"):
-            if st.session_state.get("delete_confirmed", False):
-                result = clear_all_violation_data()
-                st.success(f"✅ {result['message']}")
-                st.session_state.delete_confirmed = False
-                st.rerun()
-            else:
-                st.session_state.delete_confirmed = True
-                st.error("🚨 Click again to confirm deletion!")
-                st.rerun()
+    # Data management functionality removed from frontend
+    # Backend functions remain available in analytics.reports
 
-    if st.button("🔄 Run Evaluation (test_data)"):
+    if st.button("🔄 Run Evaluation (test_data)", key="run_evaluation_button"):
         with st.spinner("Evaluating on test_data..."):
             import subprocess
             result = subprocess.run(

@@ -53,19 +53,8 @@ class TrafficViolationPipeline:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
 
-    def set_speed_calibration(self, reference_pixels: float, reference_meters: float):
-        """Set calibration for speed calculation."""
-        self.violation_detector.set_speed_calibration(reference_pixels, reference_meters)
-
-    def set_speed_limit(self, vehicle_class: str, limit_kmh: float):
-        """Set speed limit for a specific vehicle type."""
-        self.violation_detector.set_speed_limit(vehicle_class, limit_kmh)
-
     def process_video_frame(self, image: np.ndarray, timestamp: float, save_evidence: bool = True) -> tuple:
-        """Process a single video frame with timestamp for speed tracking."""
-        # Set timestamp for tracking
-        self.violation_detector.set_frame_timestamp(timestamp)
-        
+        """Process a single video frame."""
         return self._process_frame(image, save_evidence, f"frame_{self._frame_count}")
 
     def _process_frame(self, image: np.ndarray, save_evidence: bool = True, image_source: str = "unknown") -> tuple:
@@ -115,12 +104,6 @@ class TrafficViolationPipeline:
                 "evidence_path": evidence_path,
                 "detections_count": len(detections),
             }
-            # Add speed data if available
-            if "speed" in v:
-                record["speed"] = v["speed"]
-            if "speed_limit" in v:
-                record["speed_limit"] = v["speed_limit"]
-            
             save_violation(record)
             records.append(record)
 
@@ -133,7 +116,7 @@ class TrafficViolationPipeline:
         return self._process_frame(image_path, save_evidence)
 
     def process_video(self, video_path: str, save_evidence: bool = True, fps: float = 30.0) -> list:
-        """Process a video file frame by frame for speed detection."""
+        """Process a video file frame by frame."""
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ValueError(f"Cannot open video file: {video_path}")

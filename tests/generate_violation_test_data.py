@@ -27,8 +27,7 @@ class ViolationTestDataGenerator:
             "Wrong-Side Driving",
             "Stop-Line Violation",
             "Red-Light Violation",
-            "Illegal Parking",
-            "Overspeed"
+            "Illegal Parking"
         ]
     
     def create_base_scene(self, width=640, height=480):
@@ -243,63 +242,7 @@ class ViolationTestDataGenerator:
         cv2.imwrite(output_path, scene)
         return output_path
     
-    def generate_overspeed_video(self):
-        """Generate video sequence showing speeding vehicle."""
-        fps = 30
-        duration_seconds = 3
-        width, height = 640, 480
-        
-        # Create video writer
-        output_path = os.path.join(self.output_dir, "overspeed_violation.mp4")
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-        
-        # Generate frames with vehicle moving at increasing speed
-        num_frames = fps * duration_seconds
-        
-        for frame_num in range(num_frames):
-            frame = self.create_base_scene()
-            
-            # Speed reference markers (every 100 pixels)
-            for x in range(100, 600, 100):
-                cv2.line(frame, (x, 150), (x, 400), (255, 255, 0), 1)
-                cv2.putText(frame, f"{x}px", (x-15, 145), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 0), 1)
-            
-            # Speed text (simulated)
-            speed = 40 + (frame_num / num_frames) * 40  # 40-80 km/h
-            cv2.putText(frame, f"Speed: {int(speed)} km/h", (450, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            
-            if speed > 50:
-                cv2.putText(frame, "OVERSPEED!", (450, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            
-            # Car position (moving faster as frames progress)
-            start_x = 50
-            end_x = 550
-            progress = frame_num / num_frames
-            
-            # Non-linear movement to simulate acceleration
-            car_x = int(start_x + (end_x - start_x) * (progress ** 1.5))
-            
-            # Car
-            cv2.rectangle(frame, (car_x, 280), (car_x + 100, 350), (0, 100, 255), -1)
-            cv2.rectangle(frame, (car_x + 10, 260), (car_x + 90, 280), (200, 200, 200), -1)
-            
-            # Motion blur effect
-            blur_length = int(speed / 10)
-            if blur_length > 0:
-                cv2.line(frame, (car_x - blur_length, 315), (car_x, 315), (200, 200, 255), blur_length)
-            
-            # License plate
-            cv2.rectangle(frame, (car_x + 70, 340), (car_x + 100, 360), (255, 255, 0), -1)
-            cv2.putText(frame, "HR26", (car_x + 72, 352), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
-            
-            # Frame number
-            cv2.putText(frame, f"Frame: {frame_num}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            out.write(frame)
-        
-        out.release()
-        return output_path
+    
     
     def generate_all_violations(self):
         """Generate test data for all violation types."""
@@ -331,17 +274,6 @@ class ViolationTestDataGenerator:
                 print(f"    ✗ Error: {e}")
                 generated_files[violation_name] = None
         
-        # Generate video-based violation
-        print("\nGenerating video violations...")
-        print("  Generating: Overspeed")
-        try:
-            video_path = self.generate_overspeed_video()
-            generated_files["Overspeed"] = video_path
-            print(f"    ✓ Created: {video_path}")
-        except Exception as e:
-            print(f"    ✗ Error: {e}")
-            generated_files["Overspeed"] = None
-        
         # Generate metadata file
         print("\nGenerating metadata file...")
         metadata = {
@@ -353,7 +285,7 @@ class ViolationTestDataGenerator:
         for violation_name, path in generated_files.items():
             metadata["violations"][violation_name] = {
                 "file_path": path,
-                "file_type": "video" if violation_name == "Overspeed" else "image",
+                "file_type": "image",
                 "status": "generated" if path else "failed"
             }
         

@@ -61,7 +61,7 @@ def test_database_operations():
     # Test 5: Count by type
     print("\n5. Testing count_by_type()...")
     # Add some more test records with different types
-    test_types = ["Helmet Non-Compliance", "Stop-Line Violation", "Overspeed"]
+    test_types = ["Helmet Non-Compliance", "Stop-Line Violation"]
     for i, vtype in enumerate(test_types):
         test_record = {
             "violation_type": vtype,
@@ -99,30 +99,6 @@ def test_database_operations():
     final_count = get_total_count()
     assert final_count == 0
     print(f"   ✓ Verified deletion: {final_count} records remaining")
-    
-    # Test 8: Test speed data storage
-    print("\n8. Testing speed data storage...")
-    speed_record = {
-        "violation_type": "Overspeed",
-        "confidence": 0.85,
-        "license_plate": "SPEED01",
-        "plate_confidence": 0.8,
-        "vehicle_class": "car",
-        "bbox": [100, 100, 200, 200],
-        "image_source": "test.jpg",
-        "evidence_path": "",
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "metadata": {},
-        "speed": 65.5,
-        "speed_limit": 50.0
-    }
-    
-    speed_id = save_violation(speed_record)
-    retrieved = search_violations(query="SPEED01", limit=1)
-    assert len(retrieved) > 0
-    assert retrieved[0]['speed'] == 65.5
-    assert retrieved[0]['speed_limit'] == 50.0
-    print(f"   ✓ Speed data stored and retrieved correctly")
     
     # Cleanup
     delete_all_violations()
