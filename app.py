@@ -90,10 +90,13 @@ with main_tab:
 
         with feed_type[0]:
             upload_types = ["jpg", "png", "jpeg", "zip"]
+            upload_label = "Upload frames or archives (.jpg, .png, .zip"
             if PDF_SUPPORT:
                 upload_types.append("pdf")
+                upload_label += ", .pdf"
+            upload_label += ")"
             uploaded_file = st.file_uploader(
-                f"Upload frames or archives (.jpg, .png, .zip{'', .pdf' if PDF_SUPPORT else ''})",
+                upload_label,
                 type=upload_types,
             )
             st.markdown("**Sandbox Presets:**")
