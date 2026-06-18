@@ -175,9 +175,6 @@ with main_tab:
                 key="file_uploader_main",
                 help="Upload traffic images or archives for violation detection",
             )
-            # st.markdown("**Sandbox Presets:**")
-            # load_day = st.button("☀️ Analyze Daytime Feed Snapshot", use_container_width=True)
-            # load_night = st.button("🌙 Analyze Night-Vision Feed Snapshot", use_container_width=True)
 
         with feed_type[1]:
             st.info("Live RTSP requires camera URL configuration. Toggle simulates a preset feed.")
