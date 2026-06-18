@@ -1,7 +1,13 @@
 import streamlit as st
 import os
 import zipfile
-from pdf2image import convert_from_path
+
+# PDF processing - gracefully handle if system dependencies not available
+try:
+    from pdf2image import convert_from_path
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
 
 from pipeline import TrafficViolationPipeline
 from analytics.reports import violation_statistics, generate_summary_report, clear_all_violation_data
@@ -83,9 +89,12 @@ with main_tab:
         feed_type = st.tabs(["🖼️ Multi-Format Ingest", "📹 Live Stream (Simulated)"])
 
         with feed_type[0]:
+            upload_types = ["jpg", "png", "jpeg", "zip"]
+            if PDF_SUPPORT:
+                upload_types.append("pdf")
             uploaded_file = st.file_uploader(
-                "Upload frames or archives (.jpg, .png, .zip, .pdf)",
-                type=["jpg", "png", "jpeg", "zip", "pdf"],
+                f"Upload frames or archives (.jpg, .png, .zip{'', .pdf' if PDF_SUPPORT else ''})",
+                type=upload_types,
             )
             st.markdown("**Sandbox Presets:**")
             load_day = st.button("☀️ Analyze Daytime Feed Snapshot", use_container_width=True)
@@ -120,16 +129,19 @@ with main_tab:
                             "path": os.path.join(root, file),
                         })
         elif ext == "pdf":
-            pdf_path = f"transient_workspace/{uploaded_file.name}"
-            with open(pdf_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            try:
-                for idx, page in enumerate(convert_from_path(pdf_path, dpi=120)):
-                    page_path = f"transient_workspace/pdf_page_{idx}.jpg"
-                    page.save(page_path, "JPEG")
-                    processing_queue.append({"name": f"Page {idx + 1}", "path": page_path})
-            except Exception as e:
-                st.error(f"PDF parse error: {e}")
+            if not PDF_SUPPORT:
+                st.error("PDF processing is not available on this deployment platform. Please upload images (.jpg, .png) instead.")
+            else:
+                pdf_path = f"transient_workspace/{uploaded_file.name}"
+                with open(pdf_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                try:
+                    for idx, page in enumerate(convert_from_path(pdf_path, dpi=120)):
+                        page_path = f"transient_workspace/pdf_page_{idx}.jpg"
+                        page.save(page_path, "JPEG")
+                        processing_queue.append({"name": f"Page {idx + 1}", "path": page_path})
+                except Exception as e:
+                    st.error(f"PDF parse error: {e}")
 
     elif load_day:
         day_path = "test_data/sample_intersection_day.jpg"

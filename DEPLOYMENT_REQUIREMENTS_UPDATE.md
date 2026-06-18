@@ -26,23 +26,27 @@ I have analyzed and updated the deployment requirements files to ensure they are
 - **Issue**: Not needed for Streamlit Cloud deployment
 - **Fixed**: Removed packages.txt entirely (Python packages in requirements.txt are sufficient)
 
+### 5. **PDF Processing Limited**
+- **Old**: pdf2image with poppler-utils system dependency
+- **Issue**: poppler-utils not available on Streamlit Cloud
+- **Fixed**: Removed pdf2image dependency, added graceful error handling for PDF uploads
+- **Impact**: PDF upload functionality not available on Streamlit Cloud (image uploads still work)
+
 ## New requirements.txt
 
 ```python
 # Gridlock 2.0 - Traffic Violation AI System Requirements
-# Optimized for deployment without GPU (CPU-based inference)
-
---extra-index-url https://download.pytorch.org/whl/cpu
+# Optimized for Streamlit Cloud deployment (CPU-based inference)
 
 # Core framework
 streamlit>=1.30.0,<2.0.0
 
 # Computer vision and image processing
-opencv-python-headless>=4.8.0,<5.0.0
+opencv-python>=4.8.0,<5.0.0
 numpy>=1.24.0,<2.0.0
 Pillow>=10.0.0,<11.0.0
 
-# Deep learning frameworks (CPU versions)
+# Deep learning frameworks (CPU versions for Streamlit Cloud compatibility)
 torch>=2.3.0,<2.5.0
 torchvision>=0.18.0,<0.20.0
 
@@ -52,9 +56,8 @@ ultralytics>=8.1.0,<9.0.0
 # OCR for license plate reading
 easyocr>=1.7.1,<2.0.0
 
-# PDF generation and processing
+# PDF generation (PDF processing removed for Streamlit Cloud compatibility)
 fpdf2>=2.7.0,<3.0.0
-pdf2image>=1.17.0,<2.0.0
 
 # Configuration and utilities
 PyYAML>=6.0,<7.0
@@ -66,6 +69,7 @@ PyYAML>=6.0,<7.0
 2. **Stability**: Version ranges prevent unexpected breaking changes
 3. **Complete Dependencies**: All required Python packages are now included
 4. **Streamlit Cloud Ready**: No system dependencies needed for cloud deployment
+5. **Better OpenCV Support**: Switched to opencv-python (not headless) for improved cloud compatibility
 
 ## Backup Files
 
@@ -102,4 +106,6 @@ streamlit run app.py
 - Version constraints balance stability with security updates
 - All packages match the actual imports in the codebase
 - No system dependencies needed for Streamlit Cloud deployment
-- For container/Docker deployments, system packages may need to be added based on the environment
+- PDF upload functionality not available on Streamlit Cloud due to missing system dependencies (poppler-utils)
+- For container/Docker deployments, you may need to add system packages for PDF processing support
+- opencv-python (not headless) used for better Streamlit Cloud compatibility
