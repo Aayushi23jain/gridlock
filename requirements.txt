@@ -1,8 +1,5 @@
 # Gridlock 2.0 - Traffic Violation AI System Requirements
-# Optimized for deployment without GPU (CPU-based inference)
-
-# PyTorch CPU versions from PyTorch
---extra-index-url https://download.pytorch.org/whl/cpu
+# Optimized for Streamlit Cloud deployment (CPU-based inference)
 
 # Core framework
 streamlit>=1.30.0,<2.0.0
@@ -12,7 +9,7 @@ opencv-python-headless>=4.8.0,<5.0.0
 numpy>=1.24.0,<2.0.0
 Pillow>=10.0.0,<11.0.0
 
-# Deep learning frameworks (CPU versions)
+# Deep learning frameworks (CPU versions for Streamlit Cloud compatibility)
 torch>=2.3.0,<2.5.0
 torchvision>=0.18.0,<0.20.0
 

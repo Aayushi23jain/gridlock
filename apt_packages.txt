@@ -1,0 +1,12 @@
+# System packages for Streamlit Cloud container deployment
+# These are needed for PDF processing and some computer vision operations
+
+# PDF processing dependencies (for pdf2image)
+poppler-utils
+
+# Image processing dependencies
+libgl1-mesa-glx
+libglib2.0-0
+libgomp1
+libsm6
+libxext6

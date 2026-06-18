@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+storage/violations.db
+storage/evidence/*
+test_data/*.jpg
+test_data/*.png
+test_data/*.jpeg
+test_data/*.mp4
+test_data/*.avi
+test_data/violation_samples/*
+!test_data/.gitkeep
+!test_data/labels.json
+transient_workspace/*
+!transient_workspace/.gitkeep
+
+# Model files (can be large, comment out if including)
+# yolov8n.pt
+# yolov8s.pt
+# yolov8m.pt
+
+# Logs
+*.log
+logs/
+
+# Generated files
+*.pyc
+*.pyo
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Test outputs
+test_output/
+temp/
+tmp/
