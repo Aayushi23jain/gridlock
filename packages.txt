@@ -1,6 +1,0 @@
-# System dependencies for Gridlock 2.0 deployment
-# Required for PDF processing and image handling
-
-# PDF processing (required by pdf2image)
-poppler-utils
-
