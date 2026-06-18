@@ -27,13 +27,7 @@
 - All necessary Python packages
 - Version constraints for stability
 - Compatible with Streamlit Cloud environment
-
-#### `apt_packages.txt` (System dependencies)
-⚠️ **Optional for Streamlit Cloud**
-
-- Only needed for container-based deployments
-- Most system packages are pre-installed on Streamlit Cloud
-- May be needed for advanced PDF processing
+- **No additional system packages needed**
 
 ## Configuration Files
 
