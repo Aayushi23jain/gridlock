@@ -430,45 +430,28 @@ with analytics_tab:
     a4.metric("High Severity", high_severity_count)
 
     # Enhanced visual analytics
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 📈 Violations by Type")
-        if stats["by_type"]:
-            # Add color coding to the bar chart based on severity
-            chart_data = stats["by_type"]
-            st.bar_chart(chart_data)
-            
-            # Show severity breakdown
-            st.markdown("**Severity Breakdown:**")
-            severity_counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
-            for vtype, count in chart_data.items():
-                if vtype in VIOLATION_DATA:
-                    severity = VIOLATION_DATA[vtype]['severity']
-                    severity_counts[severity] += count
-            
-            for severity, count in severity_counts.items():
-                if count > 0:
-                    color = SEVERITY_COLORS.get(severity, '#ffcc00')
-                    st.markdown(f"<span style='color:{color}; font-weight:bold;'>● {severity}:</span> {count} violations", unsafe_allow_html=True)
-        else:
-            st.info("No violations logged yet. Process an image in the Detection tab.")
-    
-    with col2:
-        st.markdown("#### 📅 Temporal Analysis")
-        if stats["daily_counts"]:
-            st.line_chart(stats["daily_counts"])
-        else:
-            st.info("No temporal data available yet.")
+    st.markdown("#### 📈 Violations by Type")
+    if stats["by_type"]:
+        # Add color coding to the bar chart based on severity
+        chart_data = stats["by_type"]
+        st.bar_chart(chart_data)
         
-        # Peak violation times analysis
-        if stats["by_type"]:
-            st.markdown("**Peak Risk Times:**")
-            for vtype, count in sorted(stats["by_type"].items(), key=lambda x: x[1], reverse=True)[:3]:
-                if vtype in VIOLATION_DATA:
-                    common_time = VIOLATION_DATA[vtype]['common_times']
-                    risk_level = VIOLATION_DATA[vtype]['risk_level']
-                    st.markdown(f"• **{vtype}**: {common_time} (Risk: {risk_level})")
+        # Show severity breakdown
+        st.markdown("**Severity Breakdown:**")
+        severity_counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
+        for vtype, count in chart_data.items():
+            if vtype in VIOLATION_DATA:
+                severity = VIOLATION_DATA[vtype]['severity']
+                severity_counts[severity] += count
+        
+        for severity, count in severity_counts.items():
+            if count > 0:
+                color = SEVERITY_COLORS.get(severity, '#ffcc00')
+                st.markdown(f"<span style='color:{color}; font-weight:bold;'>● {severity}:</span> {count} violations", unsafe_allow_html=True)
+    else:
+        st.info("No violations logged yet. Process an image in the Detection tab.")
+    
+
 
     st.markdown("#### 🔎 Search Records")
     col_search, col_filter_type, col_filter_severity = st.columns([2, 1, 1])
