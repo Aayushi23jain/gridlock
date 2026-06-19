@@ -1,39 +1,46 @@
 {
-  "generation_date": "2026-06-17 22:59:31",
-  "total_violations": 8,
+  "generation_date": "2026-06-19 14:26:29",
+  "total_violations": 7,
   "violations": {
     "Helmet Non-Compliance": {
       "file_path": "test_data/violation_samples\\helmet_violation.jpg",
+      "number_plate": "MH72QN3993",
       "file_type": "image",
       "status": "generated"
     },
     "Seatbelt Non-Compliance": {
       "file_path": "test_data/violation_samples\\seatbelt_violation.jpg",
+      "number_plate": "DL33XB4566",
       "file_type": "image",
       "status": "generated"
     },
     "Triple Riding": {
       "file_path": "test_data/violation_samples\\triple_riding.jpg",
+      "number_plate": "KA50RZ2226",
       "file_type": "image",
       "status": "generated"
     },
     "Wrong-Side Driving": {
       "file_path": "test_data/violation_samples\\wrong_side_driving.jpg",
+      "number_plate": "TN10EB2494",
       "file_type": "image",
       "status": "generated"
     },
     "Stop-Line Violation": {
       "file_path": "test_data/violation_samples\\stop_line_violation.jpg",
+      "number_plate": "GJ96KE3475",
       "file_type": "image",
       "status": "generated"
     },
     "Red-Light Violation": {
       "file_path": "test_data/violation_samples\\red_light_violation.jpg",
+      "number_plate": "UP36BJ8107",
       "file_type": "image",
       "status": "generated"
     },
     "Illegal Parking": {
       "file_path": "test_data/violation_samples\\illegal_parking.jpg",
+      "number_plate": "RJ68VE9971",
       "file_type": "image",
       "status": "generated"
     }

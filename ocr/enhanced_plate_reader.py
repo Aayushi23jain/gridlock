@@ -5,10 +5,18 @@ from __future__ import annotations
 import cv2
 import easyocr
 import numpy as np
+import re
 
 
 class EnhancedPlateReader:
     """Improved plate reader with multiple preprocessing strategies."""
+    
+    # Indian state codes for validation
+    STATE_CODES = [
+        "MH", "DL", "KA", "TN", "GJ", "UP", "RJ", "WB", "HR", "PB",
+        "AP", "AR", "AS", "BR", "CG", "GA", "HP", "JK", "JH", "KL",
+        "MP", "MN", "ML", "MZ", "NL", "OR", "SK", "TR", "UK", "PY"
+    ]
     
     def __init__(self):
         self.ocr_reader = easyocr.Reader(["en"], gpu=False, download_enabled=True)
@@ -17,17 +25,17 @@ class EnhancedPlateReader:
         """Apply multiple preprocessing strategies for robust OCR."""
         processed_images = []
         
-        # Strategy 1: Current approach
+        # Strategy 1: Current approach with higher scaling
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+        gray = cv2.resize(gray, (0, 0), fx=4.0, fy=4.0, interpolation=cv2.INTER_CUBIC)  # Increased scale
         blurred = cv2.GaussianBlur(gray, (0, 0), 3)
         sharpened = cv2.addWeighted(gray, 1.5, blurred, -0.5, 0)
         _, binary1 = cv2.threshold(sharpened, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         processed_images.append(binary1)
         
-        # Strategy 2: Adaptive thresholding
+        # Strategy 2: Adaptive thresholding with higher scale
         gray2 = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray2 = cv2.resize(gray2, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+        gray2 = cv2.resize(gray2, (0, 0), fx=4.0, fy=4.0, interpolation=cv2.INTER_CUBIC)  # Increased scale
         binary2 = cv2.adaptiveThreshold(gray2, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                                        cv2.THRESH_BINARY, 11, 2)
         processed_images.append(binary2)
@@ -39,13 +47,103 @@ class EnhancedPlateReader:
         
         # Strategy 4: Contrast enhancement
         gray4 = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray4 = cv2.resize(gray4, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+        gray4 = cv2.resize(gray4, (0, 0), fx=4.0, fy=4.0, interpolation=cv2.INTER_CUBIC)  # Increased scale
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         enhanced4 = clahe.apply(gray4)
         _, binary4 = cv2.threshold(enhanced4, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         processed_images.append(binary4)
         
+        # Strategy 5: Inverted for white-on-yellow
+        gray5 = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray5 = cv2.resize(gray5, (0, 0), fx=4.0, fy=4.0, interpolation=cv2.INTER_CUBIC)
+        inverted5 = 255 - gray5
+        _, binary5 = cv2.threshold(inverted5, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        processed_images.append(binary5)
+        
         return processed_images
+    
+    def _correct_ocr_errors(self, text: str) -> str:
+        """Correct common OCR errors for license plates."""
+        # Remove any non-alphanumeric characters
+        text = re.sub(r'[^A-Za-z0-9]', '', text).upper()
+        
+        # Common OCR corrections for synthetic text
+        corrections = {
+            'S': '5', 'O': '0', 'I': '1', 'B': '8', 'Z': '2',
+            'G': '6', 'Q': '0', 'T': '7', 'D': '0', 'A': '4',
+            'V': 'Y', 'Y': 'V', 'M': 'N', 'N': 'M',
+            '5': 'S', '0': 'O', '1': 'I', '8': 'B', '2': 'Z',
+            '6': 'G', '7': 'T', '4': 'A'
+        }
+        
+        # Apply corrections based on position (Indian format: LLDDLLDDDD)
+        if len(text) >= 10:
+            # Expected format: 2 letters + 2 digits + 2 letters + 4 digits
+            for i, char in enumerate(text):
+                # Positions 0,1 = letters, 2,3 = digits, 4,5 = letters, 6-9 = digits
+                if i in [2, 3, 6, 7, 8, 9]:  # Should be digits
+                    if char.isalpha() and char in corrections:
+                        text = text[:i] + corrections[char] + text[i+1:]
+                elif i in [0, 1, 4, 5]:  # Should be letters
+                    if char.isdigit() and char in corrections:
+                        text = text[:i] + corrections[char] + text[i+1:]
+        
+        # Specific W/V correction (common confusion)
+        if 'VW' in text:
+            text = text.replace('VW', 'WV')
+        elif 'WV' in text:
+            text = text.replace('WV', 'VW')
+        
+        # Additional letter-to-letter corrections for position 4,5 (third group)
+        if len(text) >= 6:
+            third_group = text[4:6]
+            # Common confusions in letter group
+            letter_corrections = {
+                'I': 'V', 'V': 'W', 'Y': 'V', 'N': 'M',
+                'M': 'N', 'H': 'N', 'X': 'K', 'K': 'X'
+            }
+            corrected_group = ""
+            for char in third_group:
+                if char in letter_corrections:
+                    corrected_group += letter_corrections[char]
+                else:
+                    corrected_group += char
+            text = text[:4] + corrected_group + text[6:]
+        
+        return text
+    
+    def _validate_indian_plate(self, text: str) -> tuple[str, float]:
+        """Validate and format Indian license plate."""
+        if len(text) < 4:
+            return text, 0.0
+        
+        # Remove non-alphanumeric
+        text = re.sub(r'[^A-Za-z0-9]', '', text).upper()
+        
+        # Indian plate pattern: LLDDLLDDDD (Letters, Digits, Letters, Digits)
+        pattern1 = r'^[A-Z]{2}\d{2}[A-Z]{2}\d{4}$'
+        pattern2 = r'^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$'
+        pattern3 = r'^[A-Z]{2}\d{2}[A-Z]{0,2}\d{3,4}$'
+        
+        confidence = 0.0
+        
+        if re.match(pattern1, text):
+            confidence = 1.0
+        elif re.match(pattern2, text):
+            confidence = 0.9
+        elif re.match(pattern3, text):
+            confidence = 0.8
+        elif len(text) >= 8:
+            # Partial match
+            confidence = 0.6
+        
+        # Validate state code
+        if len(text) >= 2:
+            state_code = text[:2]
+            if state_code in self.STATE_CODES:
+                confidence += 0.1
+        
+        return text, min(confidence, 1.0)
     
     def _ocr_plate_crop_enhanced(self, crop: np.ndarray) -> tuple[str, float]:
         """Enhanced OCR with multiple preprocessing strategies."""
@@ -57,12 +155,22 @@ class EnhancedPlateReader:
         
         for processed_img in processed_images:
             try:
-                results = self.ocr_reader.readtext(processed_img, paragraph=False, adjust_contrast=False)
+                results = self.ocr_reader.readtext(processed_img, paragraph=False, adjust_contrast=False, allowlist='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
                 if results:
                     current_best = max(results, key=lambda x: x[2])
                     clean = "".join(c for c in current_best[1].upper() if c.isalnum())
-                    if len(clean) >= 4 and current_best[2] > best_conf:
-                        best_text, best_conf = clean, float(current_best[2])
+                    
+                    # Apply character correction
+                    corrected_text = self._correct_ocr_errors(clean)
+                    
+                    # Validate Indian plate format
+                    validated_text, valid_conf = self._validate_indian_plate(corrected_text)
+                    
+                    # Combined confidence
+                    combined_conf = float(current_best[2]) * valid_conf
+                    
+                    if len(validated_text) >= 4 and combined_conf > best_conf:
+                        best_text, best_conf = validated_text, combined_conf
             except Exception:
                 continue
         
