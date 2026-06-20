@@ -11,18 +11,8 @@ streamlit>=1.30.0,<2.0.0
 torch>=2.3.0,<2.5.0
 torchvision>=0.18.0,<0.20.0
 
-# Object detection (YOLOv8) - installed without dependencies to prevent opencv-python
+# Object detection (YOLOv8)
 ultralytics>=8.1.0,<9.0.0
-
-# Ultralytics dependencies (excluding opencv-python)
-matplotlib>=3.3.0
-pillow>=8.0.0
-pyyaml>=5.3.1
-requests>=2.23.0
-scipy>=1.4.1
-tqdm>=4.64.0
-pandas>=1.1.4
-seaborn>=0.11.0
 
 # OCR for license plate reading
 easyocr>=1.7.1,<2.0.0
