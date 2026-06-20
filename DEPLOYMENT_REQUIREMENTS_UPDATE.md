@@ -32,6 +32,11 @@ I have analyzed and updated the deployment requirements files to ensure they are
 - **Fixed**: Removed pdf2image dependency, added graceful error handling for PDF uploads
 - **Impact**: PDF upload functionality not available on Streamlit Cloud (image uploads still work)
 
+### 6. **OpenCV Headless for Headless Environments**
+- **Issue**: opencv-python requires libGL.so.1 and other GUI libraries not available in headless environments
+- **Fixed**: Use opencv-python-headless and explicitly exclude opencv-python with `opencv-python==`
+- **Impact**: Application works in headless/cloud environments without GUI dependencies
+
 ## New requirements.txt
 
 ```python
@@ -42,7 +47,8 @@ I have analyzed and updated the deployment requirements files to ensure they are
 streamlit>=1.30.0,<2.0.0
 
 # Computer vision and image processing
-opencv-python>=4.8.0,<5.0.0
+opencv-python-headless>=4.8.0,<5.0.0
+opencv-python==
 numpy>=1.24.0,<2.0.0
 Pillow>=10.0.0,<11.0.0
 
@@ -69,7 +75,7 @@ PyYAML>=6.0,<7.0
 2. **Stability**: Version ranges prevent unexpected breaking changes
 3. **Complete Dependencies**: All required Python packages are now included
 4. **Streamlit Cloud Ready**: No system dependencies needed for cloud deployment
-5. **Better OpenCV Support**: Switched to opencv-python (not headless) for improved cloud compatibility
+5. **Headless OpenCV**: Uses opencv-python-headless to work in headless environments without GUI libraries
 
 ## Backup Files
 
