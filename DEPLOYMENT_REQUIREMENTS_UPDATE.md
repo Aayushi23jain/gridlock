@@ -34,7 +34,7 @@ I have analyzed and updated the deployment requirements files to ensure they are
 
 ### 6. **OpenCV Headless for Headless Environments**
 - **Issue**: opencv-python requires libGL.so.1 and other GUI libraries not available in headless environments
-- **Fixed**: Use opencv-python-headless (install before other packages to prevent opencv-python from being installed)
+- **Fixed**: Manually specify ultralytics dependencies (excluding opencv-python) and install opencv-python-headless first
 - **Impact**: Application works in headless/cloud environments without GUI dependencies
 
 ## New requirements.txt
@@ -84,15 +84,17 @@ Original files have been backed up:
 ## Deployment Commands
 
 ```bash
-# Install opencv-python-headless first to prevent opencv-python from being installed
-pip install opencv-python-headless>=4.8.0,<5.0.0
-
-# Install remaining Python dependencies
+# Install dependencies (opencv-python-headless is listed first to prevent opencv-python)
 pip install -r requirements.txt
 
 # Run the application
 streamlit run app.py
 ```
+
+**For Streamlit Cloud:**
+- Upload `requirements.txt` to your repository
+- The manual ultralytics dependencies (excluding opencv-python) prevent the GUI version from being installed
+- opencv-python-headless is listed first to ensure it takes precedence
 
 ## Testing Recommendations
 
@@ -116,4 +118,5 @@ streamlit run app.py
 - No system dependencies needed for Streamlit Cloud deployment
 - PDF upload functionality not available on Streamlit Cloud due to missing system dependencies (poppler-utils)
 - For container/Docker deployments, you may need to add system packages for PDF processing support
-- opencv-python-headless must be installed BEFORE other dependencies to prevent opencv-python from being installed by ultralytics
+- constraints.txt prevents opencv-python from being installed by ultralytics (which would cause libGL.so.1 errors in headless environments)
+- Always use `-c constraints.txt` when installing dependencies to ensure opencv-python-headless is used
