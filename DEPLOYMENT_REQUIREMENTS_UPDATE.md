@@ -34,7 +34,7 @@ I have analyzed and updated the deployment requirements files to ensure they are
 
 ### 6. **OpenCV Headless for Headless Environments**
 - **Issue**: opencv-python requires libGL.so.1 and other GUI libraries not available in headless environments
-- **Fixed**: Use opencv-python-headless and explicitly exclude opencv-python with `opencv-python==`
+- **Fixed**: Use opencv-python-headless (install before other packages to prevent opencv-python from being installed)
 - **Impact**: Application works in headless/cloud environments without GUI dependencies
 
 ## New requirements.txt
@@ -48,7 +48,6 @@ streamlit>=1.30.0,<2.0.0
 
 # Computer vision and image processing
 opencv-python-headless>=4.8.0,<5.0.0
-opencv-python==
 numpy>=1.24.0,<2.0.0
 Pillow>=10.0.0,<11.0.0
 
@@ -85,7 +84,10 @@ Original files have been backed up:
 ## Deployment Commands
 
 ```bash
-# Install Python dependencies
+# Install opencv-python-headless first to prevent opencv-python from being installed
+pip install opencv-python-headless>=4.8.0,<5.0.0
+
+# Install remaining Python dependencies
 pip install -r requirements.txt
 
 # Run the application
@@ -114,4 +116,4 @@ streamlit run app.py
 - No system dependencies needed for Streamlit Cloud deployment
 - PDF upload functionality not available on Streamlit Cloud due to missing system dependencies (poppler-utils)
 - For container/Docker deployments, you may need to add system packages for PDF processing support
-- opencv-python (not headless) used for better Streamlit Cloud compatibility
+- opencv-python-headless must be installed BEFORE other dependencies to prevent opencv-python from being installed by ultralytics
