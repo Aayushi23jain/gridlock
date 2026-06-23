@@ -1,5 +1,8 @@
-import streamlit as st
 import os
+# Force OpenCV to use headless mode to avoid system library dependencies
+os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '1'
+
+import streamlit as st
 import zipfile
 
 # PDF processing - gracefully handle if system dependencies not available
