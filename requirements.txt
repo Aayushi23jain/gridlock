@@ -1,8 +1,7 @@
 # Gridlock 2.0 - Traffic Violation AI System Requirements
 # Optimized for Streamlit Cloud deployment (CPU-based inference)
 
-# Computer vision and image processing
-opencv-python-headless>=4.8.0,<5.0.0
+# Computer vision and image processing (installed at end to override opencv-python from dependencies)
 
 # Core framework
 streamlit>=1.30.0,<2.0.0
@@ -26,3 +25,6 @@ fpdf2>=2.7.0,<3.0.0
 
 # Configuration and utilities
 PyYAML>=6.0,<7.0
+
+# OpenCV headless (must be last to override opencv-python from dependencies)
+opencv-python-headless>=4.8.0,<5.0.0
