@@ -2,7 +2,16 @@
 
 Automated photo identification and classification for traffic violations using computer vision.
 
-## Quick Start
+## Deployment
+
+### Hugging Face Spaces (Recommended)
+1. Go to [huggingface.co/spaces](https://huggingface.co/spaces)
+2. Click "Create new Space"
+3. Choose "Streamlit" as SDK
+4. Connect to your GitHub repository
+5. The app will deploy automatically with all system libraries pre-installed
+
+### Quick Start
 
 ```bash
 pip install -r requirements.txt
