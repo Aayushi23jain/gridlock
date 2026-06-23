@@ -3,6 +3,7 @@
 
 # Computer vision and image processing (must be first to prevent opencv-python from being installed)
 opencv-python-headless>=4.8.0,<5.0.0
+opencv-python==0.0.0  # Explicitly exclude opencv-python to prevent libGL.so.1 error on Streamlit Cloud
 
 # Core framework
 streamlit>=1.30.0,<2.0.0
