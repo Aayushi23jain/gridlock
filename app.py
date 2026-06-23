@@ -1,6 +1,7 @@
 import os
 # Force OpenCV to use headless mode to avoid system library dependencies
 os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '1'
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 
 import streamlit as st
 import zipfile
